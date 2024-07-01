@@ -33,6 +33,17 @@ double mdd[6];
 double mdp[6];
 
 int main() {
+  /*PWM周波数の設定
+  us = μs
+  period_us = 1000(ms) / MDのPWM周波数(Hz) * 10^3
+  ex: 50(us) = 1000(ms) / (20(kHz) * 10^3) * 10^3
+  */
+  MD1P.period_us(50);
+  MD2P.period_us(50);
+  MD3P.period_us(50);
+  MD4P.period_us(50);
+  MD5P.period_us(50);
+
   // 送信先情報
   const char *destinationIP = "192.168.8.205";
   const uint16_t destinationPort = 4000;
@@ -121,8 +132,9 @@ void receive(UDPSocket *receiver) {
       }
       ///////////////////////////////////////////////////////////////////////////////////
       // 0.0~1.0の範囲にマッピング
+      /*
       printf("%d, %d, %d, %d, %d\n", data[1], data[2], data[3], data[4],
-             data[5]);
+             data[5]);*/
 
       for (int i = 1; i <= 5; i++) {
         if (data[i] >= 0) {
@@ -133,9 +145,11 @@ void receive(UDPSocket *receiver) {
         mdp[i] = fabs(data[i]) / 255;
       }
 
+      printf("%f, %f, %f, %f, %f\n", mdp[1], mdp[2], mdp[3], mdp[4], mdp[5]);
+
       ///////////////////////////////////////////////////////////////////////////////////
       // Output
-      
+
       MD1D = mdd[1];
       MD2D = mdd[2];
       MD3D = mdd[3];
@@ -147,7 +161,7 @@ void receive(UDPSocket *receiver) {
       MD3P = mdp[3];
       MD4P = mdp[4];
       MD5P = mdp[5];
-      
+
       ///////////////////////////////////////////////////////////////////////////////////
     }
   }
