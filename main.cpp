@@ -11,6 +11,31 @@ ROS2からUDP経由で受け取った数値をMDに出力する
 #include "mbed.h"
 #include "rtos.h"
 #include <cstdint>
+#include "QEI.h"
+#include "PID.h"
+
+QEI E1(D3, D2, NC, 2048, QEI::X2_ENCODING);
+/*
+QEI (A_ch, B_ch, index, int pulsesPerRev, QEI::X2_ENCODING)
+index -> Xピン, １回転ごとに１パルス出力される？ 使わない場合はNCでok
+pulsePerRev -> Resolution (PPR)を指す
+X4も可,X4のほうが細かく取れる
+
+データシート(
+
+): https://jp.cuidevices.com/product/resource/amt10-v.pdf
+*/
+
+//PID parameter
+int E1_Pulse;
+int last_E1_Pulse;
+int freq = 10;
+double RPM;
+double pwm_limit = 0.5;
+double rpm_limit = 200.0;
+using ThisThread::sleep_for;
+
+PID controller(1.0, 0.0, 0.0, freq);
 
 void receive(UDPSocket *receiver);
 
@@ -43,6 +68,13 @@ int main() {
   MD3P.period_us(50);
   MD4P.period_us(50);
   MD5P.period_us(50);
+
+    // PID
+  controller.setInputLimits(0.0, rpm_limit); // RPM input from 0.0 to rpm_limit
+  controller.setOutputLimits(0.0, pwm_limit);  // PWM output from 0.0 to pwm_limit
+  // controller.setBias(0.3); // If there's a bias.
+  controller.setMode(1);
+  // end
 
   // 送信先情報
   const char *destinationIP = "192.168.8.205";
@@ -130,11 +162,11 @@ void receive(UDPSocket *receiver) {
           // printf("%s\n", ptr);
         }
       }
+      
       ///////////////////////////////////////////////////////////////////////////////////
       // 0.0~1.0の範囲にマッピング
-      /*
-      printf("%d, %d, %d, %d, %d\n", data[1], data[2], data[3], data[4],
-             data[5]);*/
+      
+      //printf("%d, %d, %d, %d, %d\n", data[1], data[2], data[3], data[4], data[5]);
 
       for (int i = 1; i <= 5; i++) {
         if (data[i] >= 0) {
@@ -145,9 +177,18 @@ void receive(UDPSocket *receiver) {
         mdp[i] = fabs(data[i]) / 255;
       }
 
-      printf("%f, %f, %f, %f, %f\n", mdp[1], mdp[2], mdp[3], mdp[4], mdp[5]);
+      //printf("%f, %f, %f, %f, %f\n", mdp[1], mdp[2], mdp[3], mdp[4], mdp[5]);
 
-      ///////////////////////////////////////////////////////////////////////////////////
+
+      //回転数の取得およびRPMの計算//////////////////////////////////////////////////////////////////
+      E1_Pulse = E1.getPulses();
+      RPM = 60000.0 / freq * (E1_Pulse - last_E1_Pulse) / 4096; // 現在のRPM（1分間当たりの回転数）を求める
+      //RPM = (E1_Pulse - last_E1_Pulse) /4096 / 600000;
+                  // printf("%d\n", RPM);
+      last_E1_Pulse = E1_Pulse;
+
+      printf("%f, %f, %f, %f, %f, %f\n", mdp[1], mdp[2], mdp[3], mdp[4], mdp[5], RPM);
+      /////////////////////////////////////////////////////////////////////////////////////////////
       // Output
 
       MD1D = mdd[1];
@@ -161,6 +202,8 @@ void receive(UDPSocket *receiver) {
       MD3P = mdp[3];
       MD4P = mdp[4];
       MD5P = mdp[5];
+
+      sleep_for(freq);
 
       ///////////////////////////////////////////////////////////////////////////////////
     }
