@@ -118,26 +118,8 @@ int main() {
 void receive(UDPSocket *receiver) {
   int E1_Pulse;
   int last_E1_Pulse;
-  double dt = 0;
+  int dt = 0;
   int RPM;
-
-  double targetRPM;
-
-  double lastError;
-  double lastRPM;
-  double Kp;
-  double Ki;
-  double Kd;
-  double Error;
-  double Integral;
-  double Differential;
-  double Output;
-  double pid_limit;
-
-  Kp = 0.1;
-  Ki = 0.0;
-  Kd = 0.0;
-  pid_limit = 0.5;
 
   using namespace std::chrono;
 
@@ -186,7 +168,7 @@ void receive(UDPSocket *receiver) {
         } else {
           mdd[i] = 0;
         }
-        // mdp[i] = fabs(data[i]) / 255;
+        mdp[i] = fabs(data[i]) / 255;
       }
       t.stop();
       dt = duration_cast<milliseconds>(t.elapsed_time()).count();
@@ -197,30 +179,9 @@ void receive(UDPSocket *receiver) {
                   // printf("%d\n", RPM);
       last_E1_Pulse = E1_Pulse;
       /////////////////////////////////////////////////////////////////////////////////////////////
-
-      // PID////////////////////////////////////////////////////////////////////////////////////////
-      dt /= 100000;
-      targetRPM = abs(data[1]) * 0.3;
-      Error = targetRPM - RPM;                 // P制御
-      Integral += Error * dt;                  // I制御
-      Differential = (Error - lastError) / dt; // D制御
-
-      Output = (Kp * Error) + (Ki * Integral) + (Kd * Differential); // PID制御
-      
-      Output = fabs(Output);
-      if(Output > pid_limit){
-          Output = pid_limit;
-      }
-      mdp[1] = Output;
-
-      lastError = Error;
-
-      /////////////////////////////////////////////////////////////////////////////////////////////
       t.reset();
       t.start();
-      // printf("%d\n", RPM);
-      printf("%d, %d, %d, %d, %d, %d, %f, %f, %f, %f\n", data[1], data[2], data[3],
-             data[4], data[5], RPM,targetRPM, dt, Output, mdp[1]);
+      printf("%d\n", RPM);
       // Output////////////////////////////////////////////////////////////////////////////////////
 
       MD1D = mdd[1];
