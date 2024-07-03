@@ -4,7 +4,6 @@ Framework for UDP MD Driver on F7
 */
 
 #include "EthernetInterface.h"
-#include "PID.h"
 #include "QEI.h"
 #include "mbed.h"
 #include "rtos.h"
@@ -26,17 +25,7 @@ X4も可,X4のほうが細かく取れる
 */
 // end
 
-int E1_Pulse;
-int last_E1_Pulse;
-int freq = 10;
-int RPM;
-double pwm_limit = 0.5;
-double rpm_limit = 200.0;
-double targetRPM;
-
 using ThisThread::sleep_for;
-
-
 
 void receive(UDPSocket *receiver);
 
@@ -72,7 +61,6 @@ int main() {
   CytronのMDはPWM周波数が20kHzなので上式になる
   */
   // end
-
 
   // 送信先情報(F7)
   const char *destinationIP = "192.168.8.205";
@@ -128,6 +116,15 @@ int main() {
 }
 
 void receive(UDPSocket *receiver) {
+  int E1_Pulse;
+  int last_E1_Pulse;
+  int dt = 0;
+  int RPM;
+
+  using namespace std::chrono;
+
+  Timer t;
+  t.start();
   SocketAddress source;
   char buffer[64];
 
@@ -162,8 +159,8 @@ void receive(UDPSocket *receiver) {
       }
       ///////////////////////////////////////////////////////////////////////////////////
       // 0.0~1.0の範囲にマッピング
-      printf("%d, %d, %d, %d, %d\n", data[1], data[2], data[3], data[4],
-             data[5]);
+      /*printf("%d, %d, %d, %d, %d\n", data[1], data[2], data[3], data[4],
+             data[5]);*/
 
       for (int i = 1; i <= 5; i++) {
         if (data[i] >= 0) {
@@ -173,30 +170,18 @@ void receive(UDPSocket *receiver) {
         }
         mdp[i] = fabs(data[i]) / 255;
       }
-      /*
-            //回転数の取得およびRPMの計算//////////////////////////////////////////////////////////////////
-            E1_Pulse = E1.getPulses();
-            RPM = 60000 / freq * (E1_Pulse - last_E1_Pulse) /
-                  4096; // 現在のRPM（1分間当たりの回転数）を求める
-                        // printf("%d\n", RPM);
-            last_E1_Pulse = E1_Pulse;
-            /////////////////////////////////////////////////////////////////////////////////////////////
-
-
-            //
-         PID////////////////////////////////////////////////////////////////////////////////////////
-            targetRPM = 200;
-            controller.setSetPoint(targetRPM); // Set Target RPM  目標値の設定
-            controller.setProcessValue(
-                RPM); // Update the process variable.　現在の回転数を取得
-
-            mdp[1] = controller.compute();
-            MD1P = mdp[1];
-            printf("%f, %d\n", mdp[1], RPM);
-
-            sleep_for(freq);
-            ////////////////////////////////////////////////////////////////////////////////////////////
-      */
+      t.stop();
+      dt = duration_cast<milliseconds>(t.elapsed_time()).count();
+      //回転数の取得およびRPMの計算//////////////////////////////////////////////////////////////////
+      E1_Pulse = E1.getPulses();
+      RPM = 60000 / dt * (E1_Pulse - last_E1_Pulse) /
+            4096; // 現在のRPM（1分間当たりの回転数）を求める
+                  // printf("%d\n", RPM);
+      last_E1_Pulse = E1_Pulse;
+      /////////////////////////////////////////////////////////////////////////////////////////////
+      t.reset();
+      t.start();
+      printf("%d\n", RPM);
       // Output////////////////////////////////////////////////////////////////////////////////////
 
       MD1D = mdd[1];
