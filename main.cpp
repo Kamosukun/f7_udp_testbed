@@ -11,6 +11,18 @@ Framework for UDP MD Driver on F7
 void receive(UDPSocket *receiver);
 void output_process();
 
+typedef struct {
+  int one;
+  int two;
+  int threee;
+  int four;
+  int five;
+} message_t;
+
+MemoryPool<message_t, 24> mpool;
+Queue<message_t, 24> queue;
+Thread thread;
+
 DigitalOut MD1D(D4);
 PwmOut MD1P(D5);
 
@@ -26,7 +38,6 @@ PwmOut MD4P(D10);
 DigitalOut MD5D(D13);
 PwmOut MD5P(D11);
 
-int data[6] = {0, 0, 0, 0, 0, 0};
 double mdd[6];
 double mdp[6];
 
@@ -83,6 +94,50 @@ int main() {
   outputThread.start(callback(output_process));
   outputThread.join();
 
+  int data[6] = {0, 0, 0, 0, 0, 0};
+
+  while (1) {
+    osEvent evt = queue.get();
+    if (evt.status == osEventMessage) {
+      message_t *message = (message_t *)evt.value.p;
+      data[1] = message->one;
+      data[2] = message->two;
+      data[3] = message->threee;
+      data[4] = message->four;
+      data[5] = message->five;
+      mpool.free(message);
+    }
+    ///////////////////////////////////////////////////////////////////////////////////
+    // 0.0~1.0の範囲にマッピング
+    printf("%d, %d, %d, %d, %d\n", data[1], data[2], data[3], data[4], data[5]);
+
+    for (int i = 1; i <= 5; i++) {
+      if (data[i] >= 0) {
+        mdd[i] = 1;
+      } else {
+        mdd[i] = 0;
+      }
+      mdp[i] = fabs(data[i]) / 255;
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////
+    // Output
+
+    MD1D = mdd[1];
+    MD2D = mdd[2];
+    MD3D = mdd[3];
+    MD4D = mdd[4];
+    MD5D = mdd[5];
+
+    MD1P = mdp[1];
+    MD2P = mdp[2];
+    MD3P = mdp[3];
+    MD4P = mdp[4];
+    MD5P = mdp[5];
+
+    ///////////////////////////////////////////////////////////////////////////////////
+  }
+
   udp.close();
   net.disconnect();
   return 0;
@@ -91,6 +146,7 @@ int main() {
 void receive(UDPSocket *receiver) {
   SocketAddress source;
   char buffer[64];
+  int data[6] = {0, 0, 0, 0, 0, 0};
 
   while (1) {
     memset(buffer, 0, sizeof(buffer));
@@ -119,42 +175,22 @@ void receive(UDPSocket *receiver) {
         if (ptr != NULL) {
           // printf("%s\n", ptr);
         }
+        ///////////////////////////////////////////////////////////////////////////////////
       }
+
+      message_t *message = mpool.try_alloc();
+      message->one = data[1];
+      message->two = data[2];
+      message->threee = data[3];
+      message->four = data[4];
+      message->five = data[5];
+
+      queue.try_put(message);
     }
   }
 }
 
-void output_process(){
-    while(1){
-              ///////////////////////////////////////////////////////////////////////////////////
-      // 0.0~1.0の範囲にマッピング
-      printf("%d, %d, %d, %d, %d\n", data[1], data[2], data[3], data[4],
-             data[5]);
+void output_process() {
 
-      for (int i = 1; i <= 5; i++) {
-        if (data[i] >= 0) {
-          mdd[i] = 1;
-        } else {
-          mdd[i] = 0;
-        }
-        mdp[i] = fabs(data[i]) / 255;
-      }
-
-      ///////////////////////////////////////////////////////////////////////////////////
-      // Output
-      
-      MD1D = mdd[1];
-      MD2D = mdd[2];
-      MD3D = mdd[3];
-      MD4D = mdd[4];
-      MD5D = mdd[5];
-
-      MD1P = mdp[1];
-      MD2P = mdp[2];
-      MD3P = mdp[3];
-      MD4P = mdp[4];
-      MD5P = mdp[5];
-      
-      ///////////////////////////////////////////////////////////////////////////////////
-    }
+  
 }
