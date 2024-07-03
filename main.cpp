@@ -4,24 +4,44 @@ Framework for UDP MD Driver on F7
 */
 
 #include "EthernetInterface.h"
+#include "PID.h"
+#include "QEI.h"
 #include "mbed.h"
 #include "rtos.h"
 #include <cstdint>
 
+/// QEI
+QEI E1(D3, D2, NC, 2048, QEI::X2_ENCODING);
+// QEI E2(PA_4, PB_0, NC, 2048, QEI::X2_ENCODING);
+
+/*
+QEI (A_ch, B_ch, index, int pulsesPerRev, QEI::X2_ENCODING)
+index -> Xピン, １回転ごとに１パルス出力される？ 使わない場合はNCでok
+pulsePerRev -> Resolution (PPR)を指す
+X4も可,X4のほうが細かく取れる
+
+データシート(
+
+): https://jp.cuidevices.com/product/resource/amt10-v.pdf
+*/
+// end
+
+int E1_Pulse;
+int last_E1_Pulse;
+int freq = 10;
+int RPM;
+double pwm_limit = 0.5;
+double rpm_limit = 200.0;
+double targetRPM;
+
+using ThisThread::sleep_for;
+
+// PID
+PID controller(1.0, 0.0, 0.0,
+               freq); // Kc, Ti, Td, interval //Kp, Ki, Kd を指している？？
+// end
+
 void receive(UDPSocket *receiver);
-void output_process();
-
-typedef struct {
-  int one;
-  int two;
-  int threee;
-  int four;
-  int five;
-} message_t;
-
-MemoryPool<message_t, 24> mpool;
-Queue<message_t, 24> queue;
-Thread thread;
 
 DigitalOut MD1D(D4);
 PwmOut MD1P(D5);
@@ -42,7 +62,16 @@ double mdd[6];
 double mdp[6];
 
 int main() {
-  // 送信先情報
+
+  // PID
+  controller.setInputLimits(0.0, rpm_limit); // RPM input from 0.0 to rpm_limit
+  controller.setOutputLimits(0.0,
+                             pwm_limit); // PWM output from 0.0 to pwm_limit
+  // controller.setBias(0.3); // If there's a bias.
+  controller.setMode(1);
+  // end
+
+  // 送信先情報(F7)
   const char *destinationIP = "192.168.8.205";
   const uint16_t destinationPort = 4000;
 
@@ -60,8 +89,6 @@ int main() {
   // 受信用スレッド
   Thread receiveThread;
 
-  Thread outputThread;
-
   /* マイコンのネットワーク設定 */
   // DHCPはオフにする（静的にIPなどを設定するため）
   net.set_dhcp(false);
@@ -72,10 +99,10 @@ int main() {
 
   // マイコンをネットワークに接続
   if (net.connect() != 0) {
-    printf("Network connection Error\n");
+    printf("Network connection Error (>_<)\n");
     return -1;
   } else {
-    printf("Network connection success\n");
+    printf("Network connection success (^_^)\n");
   }
 
   // UDPソケットをオープン
@@ -89,12 +116,8 @@ int main() {
   destination.set_port(destinationPort);
   // 受信用のスレッドをスタート
   receiveThread.start(callback(receive, &udp));
+
   receiveThread.join();
-
-  outputThread.start(callback(output_process));
-  outputThread.join();
-
-  int data[6] = {0, 0, 0, 0, 0, 0};
 
   udp.close();
   net.disconnect();
@@ -104,8 +127,8 @@ int main() {
 void receive(UDPSocket *receiver) {
   SocketAddress source;
   char buffer[64];
-  int data[6] = {0, 0, 0, 0, 0, 0};
 
+  int data[6] = {0, 0, 0, 0, 0, 0};
   while (1) {
     memset(buffer, 0, sizeof(buffer));
     if (const int result =
@@ -133,62 +156,58 @@ void receive(UDPSocket *receiver) {
         if (ptr != NULL) {
           // printf("%s\n", ptr);
         }
-        ///////////////////////////////////////////////////////////////////////////////////
+      }
+      ///////////////////////////////////////////////////////////////////////////////////
+      // 0.0~1.0の範囲にマッピング
+      printf("%d, %d, %d, %d, %d\n", data[1], data[2], data[3], data[4],
+             data[5]);
+
+      for (int i = 1; i <= 5; i++) {
+        if (data[i] >= 0) {
+          mdd[i] = 1;
+        } else {
+          mdd[i] = 0;
+        }
+        mdp[i] = fabs(data[i]) / 255;
       }
 
-      message_t *message = mpool.try_alloc();
-      message->one = data[1];
-      message->two = data[2];
-      message->threee = data[3];
-      message->four = data[4];
-      message->five = data[5];
+      //回転数の取得およびRPMの計算//////////////////////////////////////////////////////////////////
+      E1_Pulse = E1.getPulses();
+      RPM = 60000 / freq * (E1_Pulse - last_E1_Pulse) /
+            4096; // 現在のRPM（1分間当たりの回転数）を求める
+                  // printf("%d\n", RPM);
+      last_E1_Pulse = E1_Pulse;
+      /////////////////////////////////////////////////////////////////////////////////////////////
 
-      queue.try_put(message);
+/*
+      // PID////////////////////////////////////////////////////////////////////////////////////////
+      targetRPM = 200;
+      controller.setSetPoint(targetRPM); // Set Target RPM  目標値の設定
+      controller.setProcessValue(
+          RPM); // Update the process variable.　現在の回転数を取得
+
+      mdp[1] = controller.compute();
+      MD1P = mdp[1];
+      printf("%f, %d\n", mdp[1], RPM);
+
+      sleep_for(freq);
+      ////////////////////////////////////////////////////////////////////////////////////////////
+*/
+      // Output////////////////////////////////////////////////////////////////////////////////////
+
+      MD1D = mdd[1];
+      MD2D = mdd[2];
+      MD3D = mdd[3];
+      MD4D = mdd[4];
+      MD5D = mdd[5];
+
+      MD1P = mdp[1];
+      MD2P = mdp[2];
+      MD3P = mdp[3];
+      MD4P = mdp[4];
+      MD5P = mdp[5];
+
+      ///////////////////////////////////////////////////////////////////////////////////
     }
-  }
-}
-
-void output_process() {
-
-  while (1) {
-    osEvent evt = queue.get();
-    if (evt.status == osEventMessage) {
-      message_t *message = (message_t *)evt.value.p;
-      data[1] = message->one;
-      data[2] = message->two;
-      data[3] = message->threee;
-      data[4] = message->four;
-      data[5] = message->five;
-      mpool.free(message);
-    }
-    ///////////////////////////////////////////////////////////////////////////////////
-    // 0.0~1.0の範囲にマッピング
-    printf("%d, %d, %d, %d, %d\n", data[1], data[2], data[3], data[4], data[5]);
-
-    for (int i = 1; i <= 5; i++) {
-      if (data[i] >= 0) {
-        mdd[i] = 1;
-      } else {
-        mdd[i] = 0;
-      }
-      mdp[i] = fabs(data[i]) / 255;
-    }
-
-    ///////////////////////////////////////////////////////////////////////////////////
-    // Output
-
-    MD1D = mdd[1];
-    MD2D = mdd[2];
-    MD3D = mdd[3];
-    MD4D = mdd[4];
-    MD5D = mdd[5];
-
-    MD1P = mdp[1];
-    MD2P = mdp[2];
-    MD3P = mdp[3];
-    MD4P = mdp[4];
-    MD5P = mdp[5];
-
-    ///////////////////////////////////////////////////////////////////////////////////
   }
 }
