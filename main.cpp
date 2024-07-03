@@ -5,11 +5,11 @@ PID実装予定
 2024/07/03
 */
 
-#include "EthernetInterface.h"
-#include "QEI.h"
 #include "mbed.h"
+#include "EthernetInterface.h"
 #include "rtos.h"
 #include <cstdint>
+#include "QEI.h"
 
 /// QEI
 QEI E1(D3, D2, NC, 2048, QEI::X2_ENCODING);
