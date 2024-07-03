@@ -1,19 +1,16 @@
 /*
-Framework for UDP MD Driver on F7
-2024/06/30
+4輪オムニ試作機向け
+ROS2から受け取った値をMDに出力
+PID実装予定
+2024/07/03
 */
 
 #include "EthernetInterface.h"
-<<<<<<< HEAD
-=======
 #include "QEI.h"
->>>>>>> 27d1cc1577aa93bfacb4f36e7cf29473371c0aff
 #include "mbed.h"
 #include "rtos.h"
 #include <cstdint>
 
-<<<<<<< HEAD
-=======
 /// QEI
 QEI E1(D3, D2, NC, 2048, QEI::X2_ENCODING);
 // QEI E2(PA_4, PB_0, NC, 2048, QEI::X2_ENCODING);
@@ -32,7 +29,6 @@ X4も可,X4のほうが細かく取れる
 
 using ThisThread::sleep_for;
 
->>>>>>> 27d1cc1577aa93bfacb4f36e7cf29473371c0aff
 void receive(UDPSocket *receiver);
 
 DigitalOut MD1D(D4);
@@ -54,9 +50,6 @@ double mdd[6];
 double mdp[6];
 
 int main() {
-<<<<<<< HEAD
-  // 送信先情報
-=======
 
   // PWM Setting
   MD1P.period_us(50);
@@ -72,7 +65,6 @@ int main() {
   // end
 
   // 送信先情報(F7)
->>>>>>> 27d1cc1577aa93bfacb4f36e7cf29473371c0aff
   const char *destinationIP = "192.168.8.205";
   const uint16_t destinationPort = 4000;
 
@@ -100,10 +92,10 @@ int main() {
 
   // マイコンをネットワークに接続
   if (net.connect() != 0) {
-    printf("Network connection Error\n");
+    printf("Network connection Error (>_<)\n");
     return -1;
   } else {
-    printf("Network connection success\n");
+    printf("Network connection success (^_^)\n");
   }
 
   // UDPソケットをオープン
@@ -180,12 +172,6 @@ void receive(UDPSocket *receiver) {
         }
         mdp[i] = fabs(data[i]) / 255;
       }
-<<<<<<< HEAD
-
-      ///////////////////////////////////////////////////////////////////////////////////
-      // Output
-      
-=======
       t.stop();
       dt = duration_cast<milliseconds>(t.elapsed_time()).count();
       //回転数の取得およびRPMの計算//////////////////////////////////////////////////////////////////
@@ -200,7 +186,6 @@ void receive(UDPSocket *receiver) {
       printf("%d\n", RPM);
       // Output////////////////////////////////////////////////////////////////////////////////////
 
->>>>>>> 27d1cc1577aa93bfacb4f36e7cf29473371c0aff
       MD1D = mdd[1];
       MD2D = mdd[2];
       MD3D = mdd[3];
@@ -212,7 +197,7 @@ void receive(UDPSocket *receiver) {
       MD3P = mdp[3];
       MD4P = mdp[4];
       MD5P = mdp[5];
-      
+
       ///////////////////////////////////////////////////////////////////////////////////
     }
   }
