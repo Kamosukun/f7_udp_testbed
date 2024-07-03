@@ -96,48 +96,6 @@ int main() {
 
   int data[6] = {0, 0, 0, 0, 0, 0};
 
-  while (1) {
-    osEvent evt = queue.get();
-    if (evt.status == osEventMessage) {
-      message_t *message = (message_t *)evt.value.p;
-      data[1] = message->one;
-      data[2] = message->two;
-      data[3] = message->threee;
-      data[4] = message->four;
-      data[5] = message->five;
-      mpool.free(message);
-    }
-    ///////////////////////////////////////////////////////////////////////////////////
-    // 0.0~1.0の範囲にマッピング
-    printf("%d, %d, %d, %d, %d\n", data[1], data[2], data[3], data[4], data[5]);
-
-    for (int i = 1; i <= 5; i++) {
-      if (data[i] >= 0) {
-        mdd[i] = 1;
-      } else {
-        mdd[i] = 0;
-      }
-      mdp[i] = fabs(data[i]) / 255;
-    }
-
-    ///////////////////////////////////////////////////////////////////////////////////
-    // Output
-
-    MD1D = mdd[1];
-    MD2D = mdd[2];
-    MD3D = mdd[3];
-    MD4D = mdd[4];
-    MD5D = mdd[5];
-
-    MD1P = mdp[1];
-    MD2P = mdp[2];
-    MD3P = mdp[3];
-    MD4P = mdp[4];
-    MD5P = mdp[5];
-
-    ///////////////////////////////////////////////////////////////////////////////////
-  }
-
   udp.close();
   net.disconnect();
   return 0;
@@ -192,5 +150,45 @@ void receive(UDPSocket *receiver) {
 
 void output_process() {
 
-  
+  while (1) {
+    osEvent evt = queue.get();
+    if (evt.status == osEventMessage) {
+      message_t *message = (message_t *)evt.value.p;
+      data[1] = message->one;
+      data[2] = message->two;
+      data[3] = message->threee;
+      data[4] = message->four;
+      data[5] = message->five;
+      mpool.free(message);
+    }
+    ///////////////////////////////////////////////////////////////////////////////////
+    // 0.0~1.0の範囲にマッピング
+    printf("%d, %d, %d, %d, %d\n", data[1], data[2], data[3], data[4], data[5]);
+
+    for (int i = 1; i <= 5; i++) {
+      if (data[i] >= 0) {
+        mdd[i] = 1;
+      } else {
+        mdd[i] = 0;
+      }
+      mdp[i] = fabs(data[i]) / 255;
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////
+    // Output
+
+    MD1D = mdd[1];
+    MD2D = mdd[2];
+    MD3D = mdd[3];
+    MD4D = mdd[4];
+    MD5D = mdd[5];
+
+    MD1P = mdp[1];
+    MD2P = mdp[2];
+    MD3P = mdp[3];
+    MD4P = mdp[4];
+    MD5P = mdp[5];
+
+    ///////////////////////////////////////////////////////////////////////////////////
+  }
 }
