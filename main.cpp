@@ -4,42 +4,9 @@ Framework for UDP MD Driver on F7
 */
 
 #include "EthernetInterface.h"
-#include "PID.h"
-#include "QEI.h"
 #include "mbed.h"
 #include "rtos.h"
 #include <cstdint>
-
-/// QEI
-QEI E1(D3, D2, NC, 2048, QEI::X2_ENCODING);
-// QEI E2(PA_4, PB_0, NC, 2048, QEI::X2_ENCODING);
-
-/*
-QEI (A_ch, B_ch, index, int pulsesPerRev, QEI::X2_ENCODING)
-index -> Xピン, １回転ごとに１パルス出力される？ 使わない場合はNCでok
-pulsePerRev -> Resolution (PPR)を指す
-X4も可,X4のほうが細かく取れる
-
-データシート(
-
-): https://jp.cuidevices.com/product/resource/amt10-v.pdf
-*/
-// end
-
-int E1_Pulse;
-int last_E1_Pulse;
-int freq = 10;
-int RPM;
-double pwm_limit = 0.5;
-double rpm_limit = 200.0;
-double targetRPM;
-
-using ThisThread::sleep_for;
-
-// PID
-PID controller(1.0, 0.0, 0.0,
-               freq); // Kc, Ti, Td, interval //Kp, Ki, Kd を指している？？
-// end
 
 void receive(UDPSocket *receiver);
 
@@ -62,16 +29,7 @@ double mdd[6];
 double mdp[6];
 
 int main() {
-
-  // PID
-  controller.setInputLimits(0.0, rpm_limit); // RPM input from 0.0 to rpm_limit
-  controller.setOutputLimits(0.0,
-                             pwm_limit); // PWM output from 0.0 to pwm_limit
-  // controller.setBias(0.3); // If there's a bias.
-  controller.setMode(1);
-  // end
-
-  // 送信先情報(F7)
+  // 送信先情報
   const char *destinationIP = "192.168.8.205";
   const uint16_t destinationPort = 4000;
 
@@ -99,10 +57,10 @@ int main() {
 
   // マイコンをネットワークに接続
   if (net.connect() != 0) {
-    printf("Network connection Error (>_<)\n");
+    printf("Network connection Error\n");
     return -1;
   } else {
-    printf("Network connection success (^_^)\n");
+    printf("Network connection success\n");
   }
 
   // UDPソケットをオープン
@@ -171,30 +129,9 @@ void receive(UDPSocket *receiver) {
         mdp[i] = fabs(data[i]) / 255;
       }
 
-      //回転数の取得およびRPMの計算//////////////////////////////////////////////////////////////////
-      E1_Pulse = E1.getPulses();
-      RPM = 60000 / freq * (E1_Pulse - last_E1_Pulse) /
-            4096; // 現在のRPM（1分間当たりの回転数）を求める
-                  // printf("%d\n", RPM);
-      last_E1_Pulse = E1_Pulse;
-      /////////////////////////////////////////////////////////////////////////////////////////////
-
-/*
-      // PID////////////////////////////////////////////////////////////////////////////////////////
-      targetRPM = 200;
-      controller.setSetPoint(targetRPM); // Set Target RPM  目標値の設定
-      controller.setProcessValue(
-          RPM); // Update the process variable.　現在の回転数を取得
-
-      mdp[1] = controller.compute();
-      MD1P = mdp[1];
-      printf("%f, %d\n", mdp[1], RPM);
-
-      sleep_for(freq);
-      ////////////////////////////////////////////////////////////////////////////////////////////
-*/
-      // Output////////////////////////////////////////////////////////////////////////////////////
-
+      ///////////////////////////////////////////////////////////////////////////////////
+      // Output
+      
       MD1D = mdd[1];
       MD2D = mdd[2];
       MD3D = mdd[3];
@@ -206,7 +143,7 @@ void receive(UDPSocket *receiver) {
       MD3P = mdp[3];
       MD4P = mdp[4];
       MD5P = mdp[5];
-
+      
       ///////////////////////////////////////////////////////////////////////////////////
     }
   }
