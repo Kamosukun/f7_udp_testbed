@@ -4,10 +4,35 @@ Framework for UDP MD Driver on F7
 */
 
 #include "EthernetInterface.h"
+<<<<<<< HEAD
+=======
+#include "QEI.h"
+>>>>>>> 27d1cc1577aa93bfacb4f36e7cf29473371c0aff
 #include "mbed.h"
 #include "rtos.h"
 #include <cstdint>
 
+<<<<<<< HEAD
+=======
+/// QEI
+QEI E1(D3, D2, NC, 2048, QEI::X2_ENCODING);
+// QEI E2(PA_4, PB_0, NC, 2048, QEI::X2_ENCODING);
+
+/*
+QEI (A_ch, B_ch, index, int pulsesPerRev, QEI::X2_ENCODING)
+index -> Xピン, １回転ごとに１パルス出力される？ 使わない場合はNCでok
+pulsePerRev -> Resolution (PPR)を指す
+X4も可,X4のほうが細かく取れる
+
+データシート(
+
+): https://jp.cuidevices.com/product/resource/amt10-v.pdf
+*/
+// end
+
+using ThisThread::sleep_for;
+
+>>>>>>> 27d1cc1577aa93bfacb4f36e7cf29473371c0aff
 void receive(UDPSocket *receiver);
 
 DigitalOut MD1D(D4);
@@ -29,7 +54,25 @@ double mdd[6];
 double mdp[6];
 
 int main() {
+<<<<<<< HEAD
   // 送信先情報
+=======
+
+  // PWM Setting
+  MD1P.period_us(50);
+  MD2P.period_us(50);
+  MD3P.period_us(50);
+  MD4P.period_us(50);
+  MD5P.period_us(50);
+  /*
+  50(us) = 1000(ms) / 20000(Hz)
+  MDに合わせて調整
+  CytronのMDはPWM周波数が20kHzなので上式になる
+  */
+  // end
+
+  // 送信先情報(F7)
+>>>>>>> 27d1cc1577aa93bfacb4f36e7cf29473371c0aff
   const char *destinationIP = "192.168.8.205";
   const uint16_t destinationPort = 4000;
 
@@ -83,6 +126,15 @@ int main() {
 }
 
 void receive(UDPSocket *receiver) {
+  int E1_Pulse;
+  int last_E1_Pulse;
+  int dt = 0;
+  int RPM;
+
+  using namespace std::chrono;
+
+  Timer t;
+  t.start();
   SocketAddress source;
   char buffer[64];
 
@@ -117,8 +169,8 @@ void receive(UDPSocket *receiver) {
       }
       ///////////////////////////////////////////////////////////////////////////////////
       // 0.0~1.0の範囲にマッピング
-      printf("%d, %d, %d, %d, %d\n", data[1], data[2], data[3], data[4],
-             data[5]);
+      /*printf("%d, %d, %d, %d, %d\n", data[1], data[2], data[3], data[4],
+             data[5]);*/
 
       for (int i = 1; i <= 5; i++) {
         if (data[i] >= 0) {
@@ -128,10 +180,27 @@ void receive(UDPSocket *receiver) {
         }
         mdp[i] = fabs(data[i]) / 255;
       }
+<<<<<<< HEAD
 
       ///////////////////////////////////////////////////////////////////////////////////
       // Output
       
+=======
+      t.stop();
+      dt = duration_cast<milliseconds>(t.elapsed_time()).count();
+      //回転数の取得およびRPMの計算//////////////////////////////////////////////////////////////////
+      E1_Pulse = E1.getPulses();
+      RPM = 60000 / dt * (E1_Pulse - last_E1_Pulse) /
+            4096; // 現在のRPM（1分間当たりの回転数）を求める
+                  // printf("%d\n", RPM);
+      last_E1_Pulse = E1_Pulse;
+      /////////////////////////////////////////////////////////////////////////////////////////////
+      t.reset();
+      t.start();
+      printf("%d\n", RPM);
+      // Output////////////////////////////////////////////////////////////////////////////////////
+
+>>>>>>> 27d1cc1577aa93bfacb4f36e7cf29473371c0aff
       MD1D = mdd[1];
       MD2D = mdd[2];
       MD3D = mdd[3];
