@@ -1,43 +1,15 @@
 /*
-For NHK2025
-NUCLEO-F767ZI + ROS2 Humble
+Framework for UDP MD Driver on F7
 2024/06/30
-Comment:
-四輪オムニ試作機のMD制御用
-ROS2からUDP経由で受け取った数値をMDに出力する
 */
 
 #include "EthernetInterface.h"
 #include "mbed.h"
 #include "rtos.h"
 #include <cstdint>
-#include "QEI.h"
-#include "PID.h"
-
-QEI E1(D3, D2, NC, 2048, QEI::X2_ENCODING);
-/*
-QEI (A_ch, B_ch, index, int pulsesPerRev, QEI::X2_ENCODING)
-index -> Xピン, １回転ごとに１パルス出力される？ 使わない場合はNCでok
-pulsePerRev -> Resolution (PPR)を指す
-X4も可,X4のほうが細かく取れる
-
-データシート(
-
-): https://jp.cuidevices.com/product/resource/amt10-v.pdf
-*/
-
-//PID parameter
-int E1_Pulse;
-int last_E1_Pulse;
-int freq = 10;
-double RPM;
-double pwm_limit = 0.5;
-double rpm_limit = 200.0;
-using ThisThread::sleep_for;
-
-PID controller(1.0, 0.0, 0.0, freq);
 
 void receive(UDPSocket *receiver);
+void output_process();
 
 DigitalOut MD1D(D4);
 PwmOut MD1P(D5);
@@ -54,28 +26,11 @@ PwmOut MD4P(D10);
 DigitalOut MD5D(D13);
 PwmOut MD5P(D11);
 
+int data[6] = {0, 0, 0, 0, 0, 0};
 double mdd[6];
 double mdp[6];
 
 int main() {
-  /*PWM周波数の設定
-  us = μs
-  period_us = 1000(ms) / MDのPWM周波数(Hz) * 10^3
-  ex: 50(us) = 1000(ms) / (20(kHz) * 10^3) * 10^3
-  */
-  MD1P.period_us(50);
-  MD2P.period_us(50);
-  MD3P.period_us(50);
-  MD4P.period_us(50);
-  MD5P.period_us(50);
-
-    // PID
-  controller.setInputLimits(0.0, rpm_limit); // RPM input from 0.0 to rpm_limit
-  controller.setOutputLimits(0.0, pwm_limit);  // PWM output from 0.0 to pwm_limit
-  // controller.setBias(0.3); // If there's a bias.
-  controller.setMode(1);
-  // end
-
   // 送信先情報
   const char *destinationIP = "192.168.8.205";
   const uint16_t destinationPort = 4000;
@@ -93,6 +48,8 @@ int main() {
   UDPSocket udp;
   // 受信用スレッド
   Thread receiveThread;
+
+  Thread outputThread;
 
   /* マイコンのネットワーク設定 */
   // DHCPはオフにする（静的にIPなどを設定するため）
@@ -121,8 +78,10 @@ int main() {
   destination.set_port(destinationPort);
   // 受信用のスレッドをスタート
   receiveThread.start(callback(receive, &udp));
-
   receiveThread.join();
+
+  outputThread.start(callback(output_process));
+  outputThread.join();
 
   udp.close();
   net.disconnect();
@@ -133,7 +92,6 @@ void receive(UDPSocket *receiver) {
   SocketAddress source;
   char buffer[64];
 
-  int data[6] = {0, 0, 0, 0, 0, 0};
   while (1) {
     memset(buffer, 0, sizeof(buffer));
     if (const int result =
@@ -162,11 +120,16 @@ void receive(UDPSocket *receiver) {
           // printf("%s\n", ptr);
         }
       }
-      
-      ///////////////////////////////////////////////////////////////////////////////////
+    }
+  }
+}
+
+void output_process(){
+    while(1){
+              ///////////////////////////////////////////////////////////////////////////////////
       // 0.0~1.0の範囲にマッピング
-      
-      //printf("%d, %d, %d, %d, %d\n", data[1], data[2], data[3], data[4], data[5]);
+      printf("%d, %d, %d, %d, %d\n", data[1], data[2], data[3], data[4],
+             data[5]);
 
       for (int i = 1; i <= 5; i++) {
         if (data[i] >= 0) {
@@ -177,20 +140,9 @@ void receive(UDPSocket *receiver) {
         mdp[i] = fabs(data[i]) / 255;
       }
 
-      //printf("%f, %f, %f, %f, %f\n", mdp[1], mdp[2], mdp[3], mdp[4], mdp[5]);
-
-
-      //回転数の取得およびRPMの計算//////////////////////////////////////////////////////////////////
-      E1_Pulse = E1.getPulses();
-      RPM = 60000.0 / freq * (E1_Pulse - last_E1_Pulse) / 4096; // 現在のRPM（1分間当たりの回転数）を求める
-      //RPM = (E1_Pulse - last_E1_Pulse) /4096 / 600000;
-                  // printf("%d\n", RPM);
-      last_E1_Pulse = E1_Pulse;
-
-      printf("%f, %f, %f, %f, %f, %f\n", mdp[1], mdp[2], mdp[3], mdp[4], mdp[5], RPM);
-      /////////////////////////////////////////////////////////////////////////////////////////////
+      ///////////////////////////////////////////////////////////////////////////////////
       // Output
-
+      
       MD1D = mdd[1];
       MD2D = mdd[2];
       MD3D = mdd[3];
@@ -202,10 +154,7 @@ void receive(UDPSocket *receiver) {
       MD3P = mdp[3];
       MD4P = mdp[4];
       MD5P = mdp[5];
-
-      sleep_for(freq);
-
+      
       ///////////////////////////////////////////////////////////////////////////////////
     }
-  }
 }
