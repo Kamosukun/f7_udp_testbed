@@ -2,8 +2,8 @@
 Framework for UDP MD Driver on F7
 2024/06/30
 */
+
 #include "EthernetInterface.h"
-#include "PID.h"
 #include "QEI.h"
 #include "mbed.h"
 #include "rtos.h"
@@ -118,32 +118,13 @@ int main() {
 void receive(UDPSocket *receiver) {
   int E1_Pulse;
   int last_E1_Pulse;
-  int dt;
-  double RPM;
-  double pwm_limit = 0.5;
-  double rpm_limit = 200.0;
-
-  double targetRPM;
+  int dt = 0;
+  int RPM;
 
   using namespace std::chrono;
 
-  // PID
-  PID controller(1.0, 0.0, 0.0,
-                 dt); // Kc, Ti, Td, interval //Kp, Ki, Kd を指している？？
-                          // end
-
-  // PID
-  controller.setInputLimits(0.0, rpm_limit); // RPM input from 0.0 to rpm_limit
-  controller.setOutputLimits(0.0,
-                             pwm_limit); // PWM output from 0.0 to pwm_limit
-  // controller.setBias(0.3); // If there's a bias.
-  controller.setMode(1);
-  // end
-
   Timer t;
-
   t.start();
-
   SocketAddress source;
   char buffer[64];
 
@@ -187,37 +168,22 @@ void receive(UDPSocket *receiver) {
         } else {
           mdd[i] = 0;
         }
-        //mdp[i] = fabs(data[i]) / 255;
+        mdp[i] = fabs(data[i]) / 255;
       }
-
       t.stop();
-      //回転数の取得およびRPMの計算//////////////////////////////////////////////////////////////////
       dt = duration_cast<milliseconds>(t.elapsed_time()).count();
+      //回転数の取得およびRPMの計算//////////////////////////////////////////////////////////////////
       E1_Pulse = E1.getPulses();
-      RPM = 60000.0 / dt * (E1_Pulse - last_E1_Pulse) /
+      RPM = 60000 / dt * (E1_Pulse - last_E1_Pulse) /
             4096; // 現在のRPM（1分間当たりの回転数）を求める
                   // printf("%d\n", RPM);
       last_E1_Pulse = E1_Pulse;
-
-      // printf("%d\n", RPM);
-      /*printf("%d, %d, %d, %d, %d, %d\n", data[1], data[2], data[3], data[4],
-             data[5], RPM);*/
       /////////////////////////////////////////////////////////////////////////////////////////////
-
-      // PID///////////////////////////////////////////////////////////////////////////////////////
-      /*targetRPM = data[1];
-      controller.setSetPoint(targetRPM); // Set Target RPM  目標値の設定
-      controller.setProcessValue(
-          RPM); // Update the process variable.　現在の回転数を取得
-
-      mdp[1] = controller.compute();
-      //MD1P = mdp[1];*/
-      printf("%f, %f, %f, %d\n", targetRPM, mdp[1], RPM, dt);
-
-      ////////////////////////////////////////////////////////////////////////////////////////////
       t.reset();
       t.start();
-
+      //printf("%d\n", RPM);
+      printf("%d, %d, %d, %d, %d, %d\n", data[1], data[2], data[3], data[4],
+             data[5], RPM);
       // Output////////////////////////////////////////////////////////////////////////////////////
 
       MD1D = mdd[1];
