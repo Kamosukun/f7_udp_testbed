@@ -36,10 +36,7 @@ double targetRPM;
 
 using ThisThread::sleep_for;
 
-// PID
-PID controller(1.0, 0.0, 0.0,
-               freq); // Kc, Ti, Td, interval //Kp, Ki, Kd を指している？？
-// end
+
 
 void receive(UDPSocket *receiver);
 
@@ -63,13 +60,19 @@ double mdp[6];
 
 int main() {
 
-  // PID
-  controller.setInputLimits(0.0, rpm_limit); // RPM input from 0.0 to rpm_limit
-  controller.setOutputLimits(0.0,
-                             pwm_limit); // PWM output from 0.0 to pwm_limit
-  // controller.setBias(0.3); // If there's a bias.
-  controller.setMode(1);
+  // PWM Setting
+  MD1P.period_us(50);
+  MD2P.period_us(50);
+  MD3P.period_us(50);
+  MD4P.period_us(50);
+  MD5P.period_us(50);
+  /*
+  50(us) = 1000(ms) / 20000(Hz)
+  MDに合わせて調整
+  CytronのMDはPWM周波数が20kHzなので上式になる
+  */
   // end
+
 
   // 送信先情報(F7)
   const char *destinationIP = "192.168.8.205";
@@ -170,29 +173,30 @@ void receive(UDPSocket *receiver) {
         }
         mdp[i] = fabs(data[i]) / 255;
       }
+      /*
+            //回転数の取得およびRPMの計算//////////////////////////////////////////////////////////////////
+            E1_Pulse = E1.getPulses();
+            RPM = 60000 / freq * (E1_Pulse - last_E1_Pulse) /
+                  4096; // 現在のRPM（1分間当たりの回転数）を求める
+                        // printf("%d\n", RPM);
+            last_E1_Pulse = E1_Pulse;
+            /////////////////////////////////////////////////////////////////////////////////////////////
 
-      //回転数の取得およびRPMの計算//////////////////////////////////////////////////////////////////
-      E1_Pulse = E1.getPulses();
-      RPM = 60000 / freq * (E1_Pulse - last_E1_Pulse) /
-            4096; // 現在のRPM（1分間当たりの回転数）を求める
-                  // printf("%d\n", RPM);
-      last_E1_Pulse = E1_Pulse;
-      /////////////////////////////////////////////////////////////////////////////////////////////
 
-/*
-      // PID////////////////////////////////////////////////////////////////////////////////////////
-      targetRPM = 200;
-      controller.setSetPoint(targetRPM); // Set Target RPM  目標値の設定
-      controller.setProcessValue(
-          RPM); // Update the process variable.　現在の回転数を取得
+            //
+         PID////////////////////////////////////////////////////////////////////////////////////////
+            targetRPM = 200;
+            controller.setSetPoint(targetRPM); // Set Target RPM  目標値の設定
+            controller.setProcessValue(
+                RPM); // Update the process variable.　現在の回転数を取得
 
-      mdp[1] = controller.compute();
-      MD1P = mdp[1];
-      printf("%f, %d\n", mdp[1], RPM);
+            mdp[1] = controller.compute();
+            MD1P = mdp[1];
+            printf("%f, %d\n", mdp[1], RPM);
 
-      sleep_for(freq);
-      ////////////////////////////////////////////////////////////////////////////////////////////
-*/
+            sleep_for(freq);
+            ////////////////////////////////////////////////////////////////////////////////////////////
+      */
       // Output////////////////////////////////////////////////////////////////////////////////////
 
       MD1D = mdd[1];
