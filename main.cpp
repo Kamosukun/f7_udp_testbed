@@ -10,7 +10,7 @@ Framework for UDP MD Driver on F7
 #include <cstdint>
 
 /// QEI
-QEI E1(D3, D2, NC, 2048, QEI::X2_ENCODING);
+QEI E1(D3, D2, NC, 2048, QEI::X4_ENCODING);
 // QEI E2(PA_4, PB_0, NC, 2048, QEI::X2_ENCODING);
 
 /*
@@ -43,9 +43,6 @@ PwmOut MD4P(D10);
 
 DigitalOut MD5D(D13);
 PwmOut MD5P(D11);
-
-double mdd[6];
-double mdp[6];
 
 int main() {
 
@@ -119,7 +116,24 @@ void receive(UDPSocket *receiver) {
   int E1_Pulse;
   int last_E1_Pulse;
   int dt = 0;
-  int RPM;
+  double dt_d = 0; // casted dt
+  double RPM;
+
+  double target;
+  double Kp;
+  double Ki;
+  double Kd;
+  double Error;
+  double last_Error;
+  double Integral;
+  double Differential;
+  double Output;
+  double limit;
+
+  double mdd[6];
+  double mdp[6];
+
+  double safety; // PWM出力制限　絶対に消すな
 
   using namespace std::chrono;
 
@@ -174,14 +188,47 @@ void receive(UDPSocket *receiver) {
       dt = duration_cast<milliseconds>(t.elapsed_time()).count();
       //回転数の取得およびRPMの計算//////////////////////////////////////////////////////////////////
       E1_Pulse = E1.getPulses();
-      RPM = 60000 / dt * (E1_Pulse - last_E1_Pulse) /
-            4096; // 現在のRPM（1分間当たりの回転数）を求める
-                  // printf("%d\n", RPM);
+      RPM = 60000.0 / dt * (E1_Pulse - last_E1_Pulse) /
+            8192; // 現在のRPM（1分間当たりの回転数）を求める
+      // printf("%d\n", RPM);
+      RPM = fabs(RPM);
       last_E1_Pulse = E1_Pulse;
       /////////////////////////////////////////////////////////////////////////////////////////////
+
+      /*
+      printf("%f, %d, %d, %d, %d, %d\n", RPM, data[1], data[2], data[3],
+             data[4], data[5]);*/
+
+      // PID///////////////////////////////////////////////////////////////////////////////////////
+      dt_d = (double)dt; // cast to double
+      target = abs((double)data[1]) / limit;
+      Error = target - (RPM / limit);             // P
+      Integral += (Error * dt_d);                 // I
+      Differential = (Error - last_Error) / dt_d; // D
+
+      // PID parameter
+      Kp = 0.1;
+      Ki = 0.0;
+      Kd = 0.0;
+      limit = 60.0;
+      safety = 0.5;
+      // end
+
+      Output = Output + ((Kp * Error) + (Ki * Integral) + (Kd * Differential)); // PID
+      mdp[1] = Output;
+      last_Error = Error;
+      /*
+            //安全のため出力を制限　絶対に消すな
+            if (mdp[1] >= safety) {
+              mdp[1] = safety;
+            }
+            // end*/
       t.reset();
       t.start();
-      printf("%d\n", RPM);
+      printf("%lf, %lf, %lf, %lf\n", RPM, mdp[1], Output, Error);
+
+      ////////////////////////////////////////////////////////////////////////////////////////////
+
       // Output////////////////////////////////////////////////////////////////////////////////////
 
       MD1D = mdd[1];
