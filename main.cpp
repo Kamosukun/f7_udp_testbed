@@ -207,7 +207,7 @@ void receive(UDPSocket *receiver) {
       Ki = 0.0015;
       Kd = 0.000000001;
       limit = 60.0;
-      safety = 0.5;
+      safety = 0.6;
       // end
 
       dt_d = (double)dt / 1000000000; // cast to double
@@ -220,12 +220,13 @@ void receive(UDPSocket *receiver) {
       Output += ((Kp * Error) + (Ki * Integral) + (Kd * Differential)); // PID
       mdp[1] = Output;
 
-
+      // PWM出力制限　絶対に消すな
       if (mdp[1] > safety) {
         mdp[1] = safety;
       } else if (mdp[1] < 0.0) {
         mdp[1] = 0.0;
       }
+      //end
 
       /*
             //安全のため出力を制限　絶対に消すな
