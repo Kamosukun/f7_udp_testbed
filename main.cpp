@@ -44,6 +44,28 @@ PwmOut MD4P(D10);
 DigitalOut MD5D(D13);
 PwmOut MD5P(D11);
 
+int E1_Pulse;
+int last_E1_Pulse;
+int dt = 0;
+double dt_d = 0; // casted dt
+double RPM;
+
+double target;
+double Kp;
+double Ki;
+double Kd;
+double Error;
+double last_Error;
+double Integral;
+double Differential;
+double Output = 0;
+double limit;
+
+double mdd[6];
+double mdp[6];
+
+double safety; // PWM出力制限　絶対に消すな
+
 int main() {
 
   // PWM Setting
@@ -113,27 +135,6 @@ int main() {
 }
 
 void receive(UDPSocket *receiver) {
-  int E1_Pulse;
-  int last_E1_Pulse;
-  int dt = 0;
-  double dt_d = 0; // casted dt
-  double RPM;
-
-  double target;
-  double Kp;
-  double Ki;
-  double Kd;
-  double Error;
-  double last_Error;
-  double Integral;
-  double Differential;
-  double Output;
-  double limit;
-
-  double mdd[6];
-  double mdp[6];
-
-  double safety; // PWM出力制限　絶対に消すな
 
   using namespace std::chrono;
 
@@ -200,23 +201,32 @@ void receive(UDPSocket *receiver) {
              data[4], data[5]);*/
 
       // PID///////////////////////////////////////////////////////////////////////////////////////
-      dt_d = (double)dt; // cast to double
+
+      // PID parameter
+      Kp = 0.06;
+      Ki = 0.0015;
+      Kd = 0.000000001;
+      limit = 60.0;
+      safety = 0.5;
+      // end
+
+      dt_d = (double)dt / 1000000000; // cast to double
       target = abs((double)data[1]) / limit;
       Error = target - (RPM / limit);             // P
       Integral += (Error * dt_d);                 // I
       Differential = (Error - last_Error) / dt_d; // D
 
-      // PID parameter
-      Kp = 0.1;
-      Ki = 0.0;
-      Kd = 0.0;
-      limit = 60.0;
-      safety = 0.5;
-      // end
-
-      Output = Output + ((Kp * Error) + (Ki * Integral) + (Kd * Differential)); // PID
-      mdp[1] = Output;
       last_Error = Error;
+      Output += ((Kp * Error) + (Ki * Integral) + (Kd * Differential)); // PID
+      mdp[1] = Output;
+
+
+      if (mdp[1] > safety) {
+        mdp[1] = safety;
+      } else if (mdp[1] < 0.0) {
+        mdp[1] = 0.0;
+      }
+
       /*
             //安全のため出力を制限　絶対に消すな
             if (mdp[1] >= safety) {
@@ -225,7 +235,7 @@ void receive(UDPSocket *receiver) {
             // end*/
       t.reset();
       t.start();
-      printf("%lf, %lf, %lf, %lf\n", RPM, mdp[1], Output, Error);
+      printf("%lf, %lf, %d,\n", RPM, mdp[1], data[1]);
 
       ////////////////////////////////////////////////////////////////////////////////////////////
 
