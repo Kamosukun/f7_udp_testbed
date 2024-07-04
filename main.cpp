@@ -1,7 +1,6 @@
 /*
 Framework for UDP MD Driver on F7
 2024/07/04
-
 */
 
 #include "EthernetInterface.h"
