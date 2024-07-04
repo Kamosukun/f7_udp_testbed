@@ -1,13 +1,20 @@
 /*
+<<<<<<< HEAD
 Framework for UDP MD Driver on F7
 2024/07/04
+=======
+4輪オムニ試作機向け
+ROS2から受け取った値をMDに出力
+PID実装予定
+2024/07/03
+>>>>>>> f34a39dd7ffd01a55cedbaf9a57506482fc4be54
 */
 
-#include "EthernetInterface.h"
-#include "QEI.h"
 #include "mbed.h"
+#include "EthernetInterface.h"
 #include "rtos.h"
 #include <cstdint>
+#include "QEI.h"
 
 /// QEI
 QEI E1(D3, D2, NC, 2048, QEI::X4_ENCODING);
