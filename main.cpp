@@ -1,5 +1,8 @@
 /*
-Framework for UDP MD Driver on F7
+4輪オムニ試作機
+ROS2から速度指令をRPMで受信
+エンコーダーからRPMを求めPID制御をかける　
+現時点ではPIDは１輪のみに実装
 2024/07/04
 */
 
@@ -236,7 +239,7 @@ void receive(UDPSocket *receiver) {
             // end*/
       t.reset();
       t.start();
-      printf("%lf, %lf, %d,\n", RPM, mdp[1], data[1]);
+      printf("%lf, %lf, %d\n", RPM, mdp[1], data[1]);
 
       ////////////////////////////////////////////////////////////////////////////////////////////
 
