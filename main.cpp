@@ -2,7 +2,7 @@
 4輪オムニ試作機
 ROS2から速度指令をRPMで受信
 エンコーダーからRPMを求めPID制御をかける　
-現時点ではPIDは１輪のみに実装
+F7メイン基板向けにピン割り当てを変更
 2024/07/04
 */
 
@@ -13,8 +13,12 @@ ROS2から速度指令をRPMで受信
 #include <cstdint>
 
 /// QEI
-QEI E1(D3, D2, NC, 2048, QEI::X4_ENCODING);
-// QEI E2(PA_4, PB_0, NC, 2048, QEI::X2_ENCODING);
+QEI ENC1(PD_5, PC_0, NC, 2048, QEI::X4_ENCODING);
+QEI ENC2(PD_4, PC_3, NC, 2048, QEI::X4_ENCODING);
+QEI ENC3(PD_3, PF_3, NC, 2048, QEI::X4_ENCODING);
+QEI ENC4(PE_2, PF_5, NC, 2048, QEI::X4_ENCODING);
+QEI ENC5(PE_4, PF_10, NC, 2048, QEI::X4_ENCODING);
+QEI ENC6(PE_3, PF_2, NC, 2048, QEI::X4_ENCODING);
 
 /*
 QEI (A_ch, B_ch, index, int pulsesPerRev, QEI::X2_ENCODING)
@@ -32,40 +36,48 @@ using ThisThread::sleep_for;
 
 void receive(UDPSocket *receiver);
 
-DigitalOut MD1D(D4);
-PwmOut MD1P(D5);
+PwmOut MD1P(PC_6);
+PwmOut MD2P(PB_15);
+PwmOut MD3P(PB_13);
+PwmOut MD4P(PA_15);
+PwmOut MD5P(PC_7);
+PwmOut MD6P(PB_5);
+PwmOut MD7P(PB_3);
+PwmOut MD8P(PB_4);
 
-DigitalOut MD2D(D7);
-PwmOut MD2P(D6);
+DigitalOut MD1D(PC_10);
+DigitalOut MD2D(PC_11);
+DigitalOut MD3D(PC_12);
+DigitalOut MD4D(PD_2);
+DigitalOut MD5D(PG_2);
+DigitalOut MD6D(PG_3);
+DigitalOut MD7D(PD_7);
+DigitalOut MD8D(PD_6);
 
-DigitalOut MD3D(D8);
-PwmOut MD3P(D9);
+PwmOut SERVO1(PB_1);
+PwmOut SERVO2(PB_6);
+PwmOut SERVO3(PD_13);
+PwmOut SERVO4(PD_12);
 
-DigitalOut MD4D(D12);
-PwmOut MD4P(D10);
-
-DigitalOut MD5D(D13);
-PwmOut MD5P(D11);
-
-int E1_Pulse;
-int last_E1_Pulse;
+int Pulse[6];
+int last_Pulse[6];
 int dt = 0;
 double dt_d = 0; // casted dt
-double RPM;
+double RPM[6];
 
-double target;
+double target[6];
 double Kp;
 double Ki;
 double Kd;
-double Error;
-double last_Error;
-double Integral;
-double Differential;
-double Output = 0;
+double Error[6];
+double last_Error[6];
+double Integral[6];
+double Differential[6];
+double Output[6];
 double limit;
 
-double mdd[6];
-double mdp[6];
+double mdd[9];
+double mdp[9];
 
 double safety; // PWM出力制限　絶対に消すな
 
@@ -147,6 +159,16 @@ void receive(UDPSocket *receiver) {
   char buffer[64];
 
   int data[6] = {0, 0, 0, 0, 0, 0};
+
+  // PID parameter
+  Kp = 0.06;
+  Ki = 0.0015;
+  Kd = 0.000000001;
+  limit = 60.0;
+  safety = 0.6;
+  //動作に影響するようなら#defineへ
+  // end
+
   while (1) {
     memset(buffer, 0, sizeof(buffer));
     if (const int result =
@@ -181,22 +203,30 @@ void receive(UDPSocket *receiver) {
              data[5]);*/
 
       for (int i = 1; i <= 5; i++) {
-        if (data[i] > 0) {
+        if (data[i] >= 0) {
           mdd[i] = 1;
-        } else if(data[i] < 0) {
+        } else {
           mdd[i] = 0;
         }
-        mdp[i] = fabs(data[i]) / 255;
+        // mdp[i] = fabs(data[i]) / 255;
       }
       t.stop();
+
+      //エンコーダーから値を取得&RPMの計算//////////////////////////////////////////////////////////////
+      Pulse[1] = ENC1.getPulses();
+      Pulse[2] = ENC2.getPulses();
+      Pulse[3] = ENC3.getPulses();
+      Pulse[4] = ENC4.getPulses();
+      Pulse[5] = ENC5.getPulses();
       dt = duration_cast<milliseconds>(t.elapsed_time()).count();
-      //回転数の取得およびRPMの計算//////////////////////////////////////////////////////////////////
-      E1_Pulse = E1.getPulses();
-      RPM = 60000.0 / dt * (E1_Pulse - last_E1_Pulse) /
-            8192; // 現在のRPM（1分間当たりの回転数）を求める
-      // printf("%d\n", RPM);
-      RPM = fabs(RPM);
-      last_E1_Pulse = E1_Pulse;
+
+      for (int i = 1; i <= 6; i++) {
+        RPM[i] = 60000.0 / dt * (Pulse[i] - last_Pulse[i]) /
+                 8192; // 現在のRPM（1分間当たりの回転数）を求める
+        // printf("%d\n", RPM);
+        RPM[i] = fabs(RPM[i]);
+        last_Pulse[i] = Pulse[i];
+      }
       /////////////////////////////////////////////////////////////////////////////////////////////
 
       /*
@@ -205,41 +235,31 @@ void receive(UDPSocket *receiver) {
 
       // PID///////////////////////////////////////////////////////////////////////////////////////
 
-      // PID parameter
-      Kp = 0.1;
-      Ki = 0.0015;
-      Kd = 0.000000001;
-      limit = 60.0;
-      safety = 0.6;
-      // end
-
       dt_d = (double)dt / 1000000000; // cast to double
-      target = abs((double)data[1]) / limit;
-      Error = target - (RPM / limit);                // P
-      Integral += ((Error + last_Error) * dt_d / 2); // I
-      Differential = (Error - last_Error) / dt_d;    // D
+      for (int i = 1; i <= 6; i++) {
+        target[i] = abs((double)data[i]) / limit;
+        Error[i] = target[i] - (RPM[i] / limit);             // P
+        Integral[i] += (Error[i] * dt_d);                    // I
+        Differential[i] = (Error[i] - last_Error[i]) / dt_d; // D
 
-      last_Error = Error;
-      Output += ((Kp * Error) + (Ki * Integral) + (Kd * Differential)); // PID
-      mdp[1] = Output;
+        last_Error[i] = Error[i];
+        Output[i] += ((Kp * Error[i]) + (Ki * Integral[i]) +
+                      (Kd * Differential[i])); // PID
+        mdp[1] = Output[i];
 
-      // PWM出力制限　絶対に消すな
-      if (mdp[1] > safety) {
-        mdp[1] = safety;
-      } else if (mdp[1] < 0.0) {
-        mdp[1] = 0.0;
+        // 安全のためPWMの出力を制限　絶対に消すな
+        if (mdp[i] > safety) {
+          mdp[i] = safety;
+        } else if (mdp[1] < 0.0) {
+          mdp[i] = 0.0;
+        }
+        // end
       }
-      // end
 
-      /*
-            //安全のため出力を制限　絶対に消すな
-            if (mdp[1] >= safety) {
-              mdp[1] = safety;
-            }
-            // end*/
       t.reset();
       t.start();
-      printf("%lf, %lf, %d\n", RPM, mdp[1], data[1]);
+      printf("%lf, %lf, %lf, %lf, %lf\n", mdp[1], mdp[2], mdp[3], mdp[4],
+             mdp[5]);
 
       ////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -250,12 +270,18 @@ void receive(UDPSocket *receiver) {
       MD3D = mdd[3];
       MD4D = mdd[4];
       MD5D = mdd[5];
+      MD6D = mdd[6];
+      MD7D = mdd[7];
+      MD8D = mdd[8];
 
       MD1P = mdp[1];
       MD2P = mdp[2];
       MD3P = mdp[3];
       MD4P = mdp[4];
       MD5P = mdp[5];
+      MD6P = mdp[6];
+      MD7P = mdp[7];
+      MD8P = mdp[8];
 
       ///////////////////////////////////////////////////////////////////////////////////
     }
