@@ -59,8 +59,8 @@ PwmOut SERVO2(PB_6);
 PwmOut SERVO3(PD_13);
 PwmOut SERVO4(PD_12);
 
-int Pulse[6];
-int last_Pulse[6];
+int Pulse[7];
+int last_Pulse[7];
 int dt = 0;
 double dt_d = 0; // casted dt
 double RPM[6];
@@ -218,6 +218,7 @@ void receive(UDPSocket *receiver) {
       Pulse[3] = ENC3.getPulses();
       Pulse[4] = ENC4.getPulses();
       Pulse[5] = ENC5.getPulses();
+      Pulse[6] = ENC6.getPulses();
       dt = duration_cast<milliseconds>(t.elapsed_time()).count();
 
       for (int i = 1; i <= 6; i++) {
