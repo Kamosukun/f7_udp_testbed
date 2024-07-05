@@ -181,9 +181,9 @@ void receive(UDPSocket *receiver) {
              data[5]);*/
 
       for (int i = 1; i <= 5; i++) {
-        if (data[i] >= 0) {
+        if (data[i] > 0) {
           mdd[i] = 1;
-        } else {
+        } else if(data[i] < 0) {
           mdd[i] = 0;
         }
         mdp[i] = fabs(data[i]) / 255;
@@ -206,7 +206,7 @@ void receive(UDPSocket *receiver) {
       // PID///////////////////////////////////////////////////////////////////////////////////////
 
       // PID parameter
-      Kp = 0.06;
+      Kp = 0.1;
       Ki = 0.0015;
       Kd = 0.000000001;
       limit = 60.0;
@@ -215,9 +215,9 @@ void receive(UDPSocket *receiver) {
 
       dt_d = (double)dt / 1000000000; // cast to double
       target = abs((double)data[1]) / limit;
-      Error = target - (RPM / limit);             // P
-      Integral += (Error * dt_d);                 // I
-      Differential = (Error - last_Error) / dt_d; // D
+      Error = target - (RPM / limit);                // P
+      Integral += ((Error + last_Error) * dt_d / 2); // I
+      Differential = (Error - last_Error) / dt_d;    // D
 
       last_Error = Error;
       Output += ((Kp * Error) + (Ki * Integral) + (Kd * Differential)); // PID
@@ -229,7 +229,7 @@ void receive(UDPSocket *receiver) {
       } else if (mdp[1] < 0.0) {
         mdp[1] = 0.0;
       }
-      //end
+      // end
 
       /*
             //安全のため出力を制限　絶対に消すな
