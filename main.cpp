@@ -13,10 +13,11 @@ F7メイン基板向けにピン割り当てを変更
 #include <cstdint>
 
 /// QEI
-QEI ENC1(PD_5, PC_0, NC, 2048, QEI::X4_ENCODING);
-QEI ENC2(PD_4, PC_3, NC, 2048, QEI::X4_ENCODING);
-QEI ENC3(PD_3, PF_3, NC, 2048, QEI::X4_ENCODING);
-QEI ENC4(PE_2, PF_5, NC, 2048, QEI::X4_ENCODING);
+// QEI ENC1(PD_5, PC_0, NC, 2048, QEI::X4_ENCODING);
+QEI ENC1(D3, D2, NC, 2048, QEI::X4_ENCODING);
+// QEI ENC2(PD_4, PC_3, NC, 2048, QEI::X4_ENCODING);
+// QEI ENC3(PD_3, PF_3, NC, 2048, QEI::X4_ENCODING);
+// QEI ENC4(PE_2, PF_5, NC, 2048, QEI::X4_ENCODING);
 QEI ENC5(PE_4, PF_10, NC, 2048, QEI::X4_ENCODING);
 QEI ENC6(PE_3, PF_2, NC, 2048, QEI::X4_ENCODING);
 
@@ -36,7 +37,7 @@ using ThisThread::sleep_for;
 
 void receive(UDPSocket *receiver);
 
-PwmOut MD1P(PC_6);
+// PwmOut MD1P(PC_6);
 PwmOut MD2P(PB_15);
 PwmOut MD3P(PB_13);
 PwmOut MD4P(PA_15);
@@ -45,7 +46,7 @@ PwmOut MD6P(PB_5);
 PwmOut MD7P(PB_3);
 PwmOut MD8P(PB_4);
 
-DigitalOut MD1D(PC_10);
+// DigitalOut MD1D(PC_10);
 DigitalOut MD2D(PC_11);
 DigitalOut MD3D(PC_12);
 DigitalOut MD4D(PD_2);
@@ -53,6 +54,9 @@ DigitalOut MD5D(PG_2);
 DigitalOut MD6D(PG_3);
 DigitalOut MD7D(PD_7);
 DigitalOut MD8D(PD_6);
+
+DigitalOut MD1D(D4);
+PwmOut MD1P(D5);
 
 PwmOut SERVO1(PB_1);
 PwmOut SERVO2(PB_6);
@@ -63,16 +67,16 @@ int Pulse[7];
 int last_Pulse[7];
 int dt = 0;
 double dt_d = 0; // casted dt
-double RPM[6];
+double RPM[7];
 
-double target[6];
+double target[7];
 double Kp;
 double Ki;
 double Kd;
-double Error[6];
-double last_Error[6];
-double Integral[6];
-double Differential[6];
+double Error[7];
+double last_Error[7];
+double Integral[7];
+double Differential[7];
 double Output[6];
 double limit;
 
@@ -89,6 +93,9 @@ int main() {
   MD3P.period_us(50);
   MD4P.period_us(50);
   MD5P.period_us(50);
+  MD6P.period_us(50);
+  MD7P.period_us(50);
+  MD8P.period_us(50);
   /*
   50(us) = 1000(ms) / 20000(Hz)
   MDに合わせて調整
@@ -161,7 +168,7 @@ void receive(UDPSocket *receiver) {
   int data[6] = {0, 0, 0, 0, 0, 0};
 
   // PID parameter
-  Kp = 0.06;
+  Kp = 0.1;
   Ki = 0.0015;
   Kd = 0.000000001;
   limit = 60.0;
@@ -203,9 +210,9 @@ void receive(UDPSocket *receiver) {
              data[5]);*/
 
       for (int i = 1; i <= 5; i++) {
-        if (data[i] >= 0) {
+        if (data[i] > 0) {
           mdd[i] = 1;
-        } else {
+        } else if(data[i] < 0){
           mdd[i] = 0;
         }
         // mdp[i] = fabs(data[i]) / 255;
@@ -214,11 +221,11 @@ void receive(UDPSocket *receiver) {
 
       //エンコーダーから値を取得&RPMの計算//////////////////////////////////////////////////////////////
       Pulse[1] = ENC1.getPulses();
-      Pulse[2] = ENC2.getPulses();
-      Pulse[3] = ENC3.getPulses();
-      Pulse[4] = ENC4.getPulses();
-      Pulse[5] = ENC5.getPulses();
-      Pulse[6] = ENC6.getPulses();
+      // Pulse[2] = ENC2.getPulses();
+      // Pulse[3] = ENC3.getPulses();
+      // Pulse[4] = ENC4.getPulses();
+      // Pulse[5] = ENC5.getPulses();
+      // Pulse[6] = ENC6.getPulses();
       dt = duration_cast<milliseconds>(t.elapsed_time()).count();
 
       for (int i = 1; i <= 6; i++) {
@@ -228,6 +235,12 @@ void receive(UDPSocket *receiver) {
         RPM[i] = fabs(RPM[i]);
         last_Pulse[i] = Pulse[i];
       }
+      //ENC1.reset();
+      // ENC2.reset();
+      // ENC3.reset();
+      // ENC4.reset();
+      // ENC5.reset();
+      // ENC6.reset();
       /////////////////////////////////////////////////////////////////////////////////////////////
 
       /*
@@ -239,14 +252,14 @@ void receive(UDPSocket *receiver) {
       dt_d = (double)dt / 1000000000; // cast to double
       for (int i = 1; i <= 6; i++) {
         target[i] = abs((double)data[i]) / limit;
-        Error[i] = target[i] - (RPM[i] / limit);             // P
-        Integral[i] += (Error[i] * dt_d);                    // I
-        Differential[i] = (Error[i] - last_Error[i]) / dt_d; // D
+        Error[i] = target[i] - (RPM[i] / limit);                // P
+        Integral[i] += ((Error[i] + last_Error[i]) * dt_d / 2); // I
+        Differential[i] = (Error[i] - last_Error[i]) / dt_d;    // D
 
         last_Error[i] = Error[i];
         Output[i] += ((Kp * Error[i]) + (Ki * Integral[i]) +
                       (Kd * Differential[i])); // PID
-        mdp[1] = Output[i];
+        mdp[i] = Output[i];
 
         // 安全のためPWMの出力を制限　絶対に消すな
         if (mdp[i] > safety) {
