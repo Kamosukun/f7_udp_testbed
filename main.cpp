@@ -2,8 +2,8 @@
 4輪オムニ試作機
 ROS2から速度指令をRPMで受信
 エンコーダーからRPMを求めPID制御をかける　
-F7メイン基板向けにピン割り当てを変更
-2024/07/04
+F7メイン基板V2向けにピン割り当てを変更
+2024/07/22
 */
 
 #include "EthernetInterface.h"
@@ -13,12 +13,12 @@ F7メイン基板向けにピン割り当てを変更
 #include <cstdint>
 
 /// QEI
-QEI ENC1(PD_5, PC_0, NC, 2048, QEI::X4_ENCODING);
-QEI ENC2(PD_4, PC_3, NC, 2048, QEI::X4_ENCODING);
-QEI ENC3(PD_3, PF_3, NC, 2048, QEI::X4_ENCODING);
-QEI ENC4(PE_2, PF_5, NC, 2048, QEI::X4_ENCODING);
-QEI ENC5(PE_4, PF_10, NC, 2048, QEI::X4_ENCODING);
-QEI ENC6(PE_3, PF_2, NC, 2048, QEI::X4_ENCODING);
+QEI ENC1(PC_0, PG_1, NC, 2048, QEI::X4_ENCODING);
+QEI ENC2(PF_2, PC_3, NC, 2048, QEI::X4_ENCODING);
+QEI ENC3(PD_4, PF_5, NC, 2048, QEI::X4_ENCODING);
+QEI ENC4(PA_6, PF_7, NC, 2048, QEI::X4_ENCODING);
+QEI ENC5(PE_8, PF_9, NC, 2048, QEI::X4_ENCODING);
+QEI ENC6(PF_10, PD_11, NC, 2048, QEI::X4_ENCODING);
 
 /*
 QEI (A_ch, B_ch, index, int pulsesPerRev, QEI::X2_ENCODING)
@@ -36,23 +36,28 @@ using ThisThread::sleep_for;
 
 void receive(UDPSocket *receiver);
 
-PwmOut MD1P(PC_6);
-PwmOut MD2P(PB_15);
-PwmOut MD3P(PB_13);
-PwmOut MD4P(PA_15);
+PwmOut MD1P(PA_0);
+PwmOut MD2P(PA_3);
+PwmOut MD3P(PB_4);
+PwmOut MD4P(PB_5);
 PwmOut MD5P(PC_7);
-PwmOut MD6P(PB_5);
-PwmOut MD7P(PB_3);
-PwmOut MD8P(PB_4);
+PwmOut MD6P(PC_6);
+PwmOut MD7P(PC_8);
+PwmOut MD8P(PC_9);
 
-DigitalOut MD1D(PC_10);
-DigitalOut MD2D(PC_11);
-DigitalOut MD3D(PC_12);
-DigitalOut MD4D(PD_2);
-DigitalOut MD5D(PG_2);
-DigitalOut MD6D(PG_3);
+DigitalOut MD1D(PD_2);
+DigitalOut MD2D(PG_2);
+DigitalOut MD3D(PG_3);
+DigitalOut MD4D(PE_4);
+DigitalOut MD5D(PD_5);
+DigitalOut MD6D(PD_6);
 DigitalOut MD7D(PD_7);
-DigitalOut MD8D(PD_6);
+DigitalOut MD8D(PC_10);
+
+DigitalIn SW1(PF_15);
+DigitalIn SW2(PG_14);
+DigitalIn SW3(PG_9);
+DigitalIn SW4(PE_7);
 
 PwmOut SERVO1(PB_1);
 PwmOut SERVO2(PB_6);
@@ -89,8 +94,12 @@ int main() {
   MD3P.period_us(50);
   MD4P.period_us(50);
   MD5P.period_us(50);
+  MD6P.period_us(50);
+  MD7P.period_us(50);
+  MD8P.period_us(50);
+
   /*
-  50(us) = 1000(ms) / 20000(Hz)
+  50(us) = 1000(ms) / 20000(Hz) * 10^3
   MDに合わせて調整
   CytronのMDはPWM周波数が20kHzなので上式になる
   */
@@ -247,7 +256,7 @@ void receive(UDPSocket *receiver) {
                       (Kd * Differential[i])); // PID
         mdp[1] = Output[i];
 
-        // 安全のためPWMの出力を制限　絶対に消すな
+        // 安全のためPWMの出力を制限、絶対に消すな！
         if (mdp[i] > safety) {
           mdp[i] = safety;
         } else if (mdp[1] < 0.0) {
@@ -258,8 +267,13 @@ void receive(UDPSocket *receiver) {
 
       t.reset();
       t.start();
+      /*
       printf("%lf, %lf, %lf, %lf, %lf\n", mdp[1], mdp[2], mdp[3], mdp[4],
              mdp[5]);
+             */
+
+      // PIDが動かないときは要調整、短すぎるとPIDが動かないが長いとレスポンスが悪くなる
+      sleep_for(10);
 
       ////////////////////////////////////////////////////////////////////////////////////////////
 
