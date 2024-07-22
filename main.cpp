@@ -2,8 +2,8 @@
 4輪オムニ試作機
 ROS2から速度指令をRPMで受信
 エンコーダーからRPMを求めPID制御をかける　
-F7メイン基板向けにピン割り当てを変更
-2024/07/04
+F7メイン基板V2向けにピン割り当てを変更
+2024/07/22
 */
 
 #include "EthernetInterface.h"
@@ -13,13 +13,12 @@ F7メイン基板向けにピン割り当てを変更
 #include <cstdint>
 
 /// QEI
-// QEI ENC1(PD_5, PC_0, NC, 2048, QEI::X4_ENCODING);
-QEI ENC1(D3, D2, NC, 2048, QEI::X4_ENCODING);
-// QEI ENC2(PD_4, PC_3, NC, 2048, QEI::X4_ENCODING);
-// QEI ENC3(PD_3, PF_3, NC, 2048, QEI::X4_ENCODING);
-// QEI ENC4(PE_2, PF_5, NC, 2048, QEI::X4_ENCODING);
-QEI ENC5(PE_4, PF_10, NC, 2048, QEI::X4_ENCODING);
-QEI ENC6(PE_3, PF_2, NC, 2048, QEI::X4_ENCODING);
+QEI ENC1(PC_0, PG_1, NC, 2048, QEI::X4_ENCODING);
+QEI ENC2(PF_2, PC_3, NC, 2048, QEI::X4_ENCODING);
+QEI ENC3(PD_4, PF_5, NC, 2048, QEI::X4_ENCODING);
+QEI ENC4(PA_6, PF_7, NC, 2048, QEI::X4_ENCODING);
+QEI ENC5(PE_8, PF_9, NC, 2048, QEI::X4_ENCODING);
+QEI ENC6(PF_10, PD_11, NC, 2048, QEI::X4_ENCODING);
 
 /*
 QEI (A_ch, B_ch, index, int pulsesPerRev, QEI::X2_ENCODING)
@@ -37,26 +36,23 @@ using ThisThread::sleep_for;
 
 void receive(UDPSocket *receiver);
 
-// PwmOut MD1P(PC_6);
-PwmOut MD2P(PB_15);
-PwmOut MD3P(PB_13);
-PwmOut MD4P(PA_15);
+PwmOut MD1P(PA_0);
+PwmOut MD2P(PA_3);
+PwmOut MD3P(PB_4);
+PwmOut MD4P(PB_5);
 PwmOut MD5P(PC_7);
-PwmOut MD6P(PB_5);
-PwmOut MD7P(PB_3);
-PwmOut MD8P(PB_4);
+PwmOut MD6P(PC_6);
+PwmOut MD7P(PC_8);
+PwmOut MD8P(PC_9);
 
-// DigitalOut MD1D(PC_10);
-DigitalOut MD2D(PC_11);
-DigitalOut MD3D(PC_12);
-DigitalOut MD4D(PD_2);
-DigitalOut MD5D(PG_2);
-DigitalOut MD6D(PG_3);
+DigitalOut MD1D(PD_2);
+DigitalOut MD2D(PG_2);
+DigitalOut MD3D(PG_3);
+DigitalOut MD4D(PE_4);
+DigitalOut MD5D(PD_5);
+DigitalOut MD6D(PD_6);
 DigitalOut MD7D(PD_7);
-DigitalOut MD8D(PD_6);
-
-DigitalOut MD1D(D4);
-PwmOut MD1P(D5);
+DigitalOut MD8D(PC_10);
 
 PwmOut SERVO1(PB_1);
 PwmOut SERVO2(PB_6);
@@ -77,13 +73,12 @@ double Error[7];
 double last_Error[7];
 double Integral[7];
 double Differential[7];
-double Output[6];
-double limit;
+double Output[7];
+double rpm_limit;
+double pwm_limit; // PWM出力制限　絶対に消すな
 
 double mdd[9];
 double mdp[9];
-
-double safety; // PWM出力制限　絶対に消すな
 
 int main() {
 
@@ -165,14 +160,14 @@ void receive(UDPSocket *receiver) {
   SocketAddress source;
   char buffer[64];
 
-  int data[6] = {0, 0, 0, 0, 0, 0};
+  int data[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 
   // PID parameter
   Kp = 0.1;
   Ki = 0.0015;
   Kd = 0.000000001;
-  limit = 60.0;
-  safety = 0.6;
+  rpm_limit = 60.0;
+  pwm_limit = 0.6;
   //動作に影響するようなら#defineへ
   // end
 
@@ -205,54 +200,50 @@ void receive(UDPSocket *receiver) {
         }
       }
       ///////////////////////////////////////////////////////////////////////////////////
-      // 0.0~1.0の範囲にマッピング
+      //方向指令と速度指令を分離する
       /*printf("%d, %d, %d, %d, %d\n", data[1], data[2], data[3], data[4],
              data[5]);*/
 
       for (int i = 1; i <= 5; i++) {
         if (data[i] > 0) {
           mdd[i] = 1;
-        } else if(data[i] < 0){
+        } else if (data[i] < 0) {
           mdd[i] = 0;
         }
+        // 0.0~1.0の範囲にマッピング
         // mdp[i] = fabs(data[i]) / 255;
       }
       t.stop();
 
       //エンコーダーから値を取得&RPMの計算//////////////////////////////////////////////////////////////
       Pulse[1] = ENC1.getPulses();
-      // Pulse[2] = ENC2.getPulses();
-      // Pulse[3] = ENC3.getPulses();
-      // Pulse[4] = ENC4.getPulses();
-      // Pulse[5] = ENC5.getPulses();
-      // Pulse[6] = ENC6.getPulses();
+      Pulse[2] = ENC2.getPulses();
+      Pulse[3] = ENC3.getPulses();
+      Pulse[4] = ENC4.getPulses();
+      Pulse[5] = ENC5.getPulses();
+      Pulse[6] = ENC6.getPulses();
       dt = duration_cast<milliseconds>(t.elapsed_time()).count();
 
       for (int i = 1; i <= 6; i++) {
-        RPM[i] = 60000.0 / dt * (Pulse[i] - last_Pulse[i]) /
+        RPM[i] = 60000.0 / dt * (Pulse[i]) /
                  8192; // 現在のRPM（1分間当たりの回転数）を求める
         // printf("%d\n", RPM);
         RPM[i] = fabs(RPM[i]);
-        last_Pulse[i] = Pulse[i];
       }
-      //ENC1.reset();
-      // ENC2.reset();
-      // ENC3.reset();
-      // ENC4.reset();
-      // ENC5.reset();
-      // ENC6.reset();
+      ENC1.reset();
+      ENC2.reset();
+      ENC3.reset();
+      ENC4.reset();
+      ENC5.reset();
+      ENC6.reset();
       /////////////////////////////////////////////////////////////////////////////////////////////
-
-      /*
-      printf("%f, %d, %d, %d, %d, %d\n", RPM, data[1], data[2], data[3],
-             data[4], data[5]);*/
 
       // PID///////////////////////////////////////////////////////////////////////////////////////
 
       dt_d = (double)dt / 1000000000; // cast to double
       for (int i = 1; i <= 6; i++) {
-        target[i] = abs((double)data[i]) / limit;
-        Error[i] = target[i] - (RPM[i] / limit);                // P
+        target[i] = abs((double)data[i]) / rpm_limit;
+        Error[i] = target[i] - (RPM[i] / rpm_limit);            // P
         Integral[i] += ((Error[i] + last_Error[i]) * dt_d / 2); // I
         Differential[i] = (Error[i] - last_Error[i]) / dt_d;    // D
 
@@ -262,8 +253,8 @@ void receive(UDPSocket *receiver) {
         mdp[i] = Output[i];
 
         // 安全のためPWMの出力を制限　絶対に消すな
-        if (mdp[i] > safety) {
-          mdp[i] = safety;
+        if (mdp[i] > pwm_limit) {
+          mdp[i] = pwm_limit;
         } else if (mdp[1] < 0.0) {
           mdp[i] = 0.0;
         }
@@ -272,8 +263,12 @@ void receive(UDPSocket *receiver) {
 
       t.reset();
       t.start();
+      /*
       printf("%lf, %lf, %lf, %lf, %lf\n", mdp[1], mdp[2], mdp[3], mdp[4],
              mdp[5]);
+             */
+      // モーターがうまく回らないときは要調整、短すぎるとPIDがうまく動かず、長すぎるとレスポンスが悪くなる
+      sleep_for(50);
 
       ////////////////////////////////////////////////////////////////////////////////////////////
 
