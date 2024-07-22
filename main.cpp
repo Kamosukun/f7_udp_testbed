@@ -1,6 +1,6 @@
 /*
 4輪オムニ試作機
-ROS2から速度指令をRPMで受信
+ROS2から符号付速度指令をRPMで受信
 エンコーダーからRPMを求めPID制御をかける　
 F7メイン基板V2向けにピン割り当てを変更
 2024/07/22
@@ -12,7 +12,7 @@ F7メイン基板V2向けにピン割り当てを変更
 #include "rtos.h"
 #include <cstdint>
 
-/// QEI
+//---------------------------QEI---------------------------//
 QEI ENC1(PC_0, PG_1, NC, 2048, QEI::X4_ENCODING);
 QEI ENC2(PF_2, PC_3, NC, 2048, QEI::X4_ENCODING);
 QEI ENC3(PD_4, PF_5, NC, 2048, QEI::X4_ENCODING);
@@ -25,17 +25,15 @@ QEI (A_ch, B_ch, index, int pulsesPerRev, QEI::X2_ENCODING)
 index -> Xピン, １回転ごとに１パルス出力される？ 使わない場合はNCでok
 pulsePerRev -> Resolution (PPR)を指す
 X4も可,X4のほうが細かく取れる
-
-データシート(
-
-): https://jp.cuidevices.com/product/resource/amt10-v.pdf
+データシート: https://jp.cuidevices.com/product/resource/amt10-v.pdf
 */
-// end
+//---------------------------QEI---------------------------//
 
 using ThisThread::sleep_for;
 
 void receive(UDPSocket *receiver);
 
+//---------------------------ピンの割り当て---------------------------//
 PwmOut MD1P(PA_0);
 PwmOut MD2P(PA_3);
 PwmOut MD3P(PB_4);
@@ -59,6 +57,13 @@ PwmOut SERVO2(PB_6);
 PwmOut SERVO3(PD_13);
 PwmOut SERVO4(PD_12);
 
+DigitalIn SW1(PF_15);
+DigitalIn SW2(PG_14);
+DigitalIn SW3(PG_9);
+DigitalIn SW4(PE_7);
+//---------------------------ピンの割り当て---------------------------//
+
+//---------------------------For PID---------------------------//
 int Pulse[7];
 int last_Pulse[7];
 int dt = 0;
@@ -76,13 +81,14 @@ double Differential[7];
 double Output[7];
 double rpm_limit;
 double pwm_limit; // PWM出力制限　絶対に消すな
+//---------------------------For PID---------------------------//
 
 double mdd[9];
 double mdp[9];
 
 int main() {
 
-  // PWM Setting
+  //---------------------------PWM Settings---------------------------//
   MD1P.period_us(50);
   MD2P.period_us(50);
   MD3P.period_us(50);
@@ -96,7 +102,9 @@ int main() {
   MDに合わせて調整
   CytronのMDはPWM周波数が20kHzなので上式になる
   */
-  // end
+  //---------------------------PWM Settings---------------------------//
+
+  //---------------------------UDP Settings---------------------------//
 
   // 送信先情報(F7)
   const char *destinationIP = "192.168.8.205";
@@ -141,6 +149,9 @@ int main() {
   // 送信先の情報を入力
   destination.set_ip_address(destinationIP);
   destination.set_port(destinationPort);
+
+  //---------------------------UDP Settings---------------------------//
+
   // 受信用のスレッドをスタート
   receiveThread.start(callback(receive, &udp));
 
@@ -151,25 +162,25 @@ int main() {
   return 0;
 }
 
-void receive(UDPSocket *receiver) {
+void receive(UDPSocket *receiver) { // UDP受信スレッド
 
   using namespace std::chrono;
 
-  Timer t;
+  Timer t; //回転数の計算とPIDで使うためのタイマー
   t.start();
   SocketAddress source;
   char buffer[64];
 
   int data[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-  // PID parameter
+  //---------------------------PID parameters---------------------------//
   Kp = 0.1;
   Ki = 0.0015;
   Kd = 0.000000001;
   rpm_limit = 60.0;
   pwm_limit = 0.6;
   //動作に影響するようなら#defineへ
-  // end
+  //---------------------------PID parameters---------------------------//
 
   while (1) {
     memset(buffer, 0, sizeof(buffer));
@@ -178,8 +189,8 @@ void receive(UDPSocket *receiver) {
       printf("Receive Error : %d", result);
     } else {
 
-      ///////////////////////////////////////////////////////////////////////////////////
-      // 受信したパケット（文字列）を処理
+      //---------------------------受信したパケット（文字列）をintに変換---------------------------//
+
       char *ptr;
       int ptr_counter = 1;
       // カンマを区切りに文字列を分割
@@ -199,8 +210,9 @@ void receive(UDPSocket *receiver) {
           // printf("%s\n", ptr);
         }
       }
-      ///////////////////////////////////////////////////////////////////////////////////
-      //方向指令と速度指令を分離する
+      //---------------------------受信したパケット（文字列）をintに変換---------------------------//
+
+      //---------------------------方向指令と速度指令を分離---------------------------//
       /*printf("%d, %d, %d, %d, %d\n", data[1], data[2], data[3], data[4],
              data[5]);*/
 
@@ -213,9 +225,10 @@ void receive(UDPSocket *receiver) {
         // 0.0~1.0の範囲にマッピング
         // mdp[i] = fabs(data[i]) / 255;
       }
+      //---------------------------方向指令と速度指令を分離---------------------------//
       t.stop();
 
-      //エンコーダーから値を取得&RPMの計算//////////////////////////////////////////////////////////////
+      //---------------------------エンコーダーの値をもとに回転数（RPM）を計算---------------------------//
       Pulse[1] = ENC1.getPulses();
       Pulse[2] = ENC2.getPulses();
       Pulse[3] = ENC3.getPulses();
@@ -236,9 +249,9 @@ void receive(UDPSocket *receiver) {
       ENC4.reset();
       ENC5.reset();
       ENC6.reset();
-      /////////////////////////////////////////////////////////////////////////////////////////////
+      //---------------------------エンコーダーの値をもとに回転数（RPM）を計算---------------------------//
 
-      // PID///////////////////////////////////////////////////////////////////////////////////////
+      //---------------------------PID---------------------------//
 
       dt_d = (double)dt / 1000000000; // cast to double
       for (int i = 1; i <= 6; i++) {
@@ -260,6 +273,7 @@ void receive(UDPSocket *receiver) {
         }
         // end
       }
+      //---------------------------PID---------------------------//
 
       t.reset();
       t.start();
@@ -270,9 +284,7 @@ void receive(UDPSocket *receiver) {
       // モーターがうまく回らないときは要調整、短すぎるとPIDがうまく動かず、長すぎるとレスポンスが悪くなる
       sleep_for(50);
 
-      ////////////////////////////////////////////////////////////////////////////////////////////
-
-      // Output////////////////////////////////////////////////////////////////////////////////////
+      //---------------------------モタドラに出力---------------------------//
 
       MD1D = mdd[1];
       MD2D = mdd[2];
@@ -292,7 +304,7 @@ void receive(UDPSocket *receiver) {
       MD7P = mdp[7];
       MD8P = mdp[8];
 
-      ///////////////////////////////////////////////////////////////////////////////////
+      //---------------------------モタドラに出力---------------------------//
     }
   }
 }
