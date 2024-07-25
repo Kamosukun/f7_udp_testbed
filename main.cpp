@@ -279,28 +279,28 @@ void receive(UDPSocket *receiver) { // UDP受信スレッド
       t.start();
       /*
       printf("%lf, %lf, %lf, %lf, %lf\n", mdp[1], mdp[2], mdp[3], mdp[4],
-             mdp[5]);
-             */
+             mdp[5]);*/
+             
       // モーターがうまく回らないときは要調整、短すぎるとPIDがうまく動かず、長すぎるとレスポンスが悪くなる
-      sleep_for(50);
+      sleep_for(10);
 
       //---------------------------モタドラに出力---------------------------//
 
       MD1D = mdd[1];
       MD2D = mdd[2];
-      MD3D = mdd[3];
-      MD4D = mdd[4];
-      MD5D = mdd[5];
-      MD6D = mdd[6];
+      //MD3D = mdd[3];
+      //MD4D = mdd[4];
+      MD5D = mdd[3];
+      MD6D = mdd[4];
       MD7D = mdd[7];
       MD8D = mdd[8];
 
       MD1P = mdp[1];
       MD2P = mdp[2];
-      MD3P = mdp[3];
-      MD4P = mdp[4];
-      MD5P = mdp[5];
-      MD6P = mdp[6];
+      //MD3P = mdp[3];
+      //MD4P = mdp[4];
+      MD5P = mdp[3];
+      MD6P = mdp[4];
       MD7P = mdp[7];
       MD8P = mdp[8];
 
