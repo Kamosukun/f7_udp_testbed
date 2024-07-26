@@ -99,7 +99,7 @@ int main() {
   MD7P.period_us(50);
   MD8P.period_us(50);
   /*
-  50(us) = 1000(ms) / 20000(Hz)
+  50(us) = 1000(ms) / 20000(Hz) * 10^3
   MDに合わせて調整
   CytronのMDはPWM周波数が20kHzなので上式になる
   */
