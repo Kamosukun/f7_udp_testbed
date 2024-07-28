@@ -4,7 +4,7 @@ ROS2から符号付速度指令をRPMで受信
 エンコーダーからRPMを求めPID制御をかける　
 F7メイン基板V2向けにピン割り当てを変更
 メイン基板V2のMD3,MD4が動かない欠陥が発覚(MD7, MD8は未検証)
-2024/07/25
+2024/07/29
 */
 
 #include "EthernetInterface.h"
@@ -178,7 +178,7 @@ void receive(UDPSocket *receiver) { // UDP受信スレッド
   Kp = 0.1;
   Ki = 0.0015;
   Kd = 0.000000001;
-  rpm_limit = 60.0;
+  rpm_limit = 120.0;
   pwm_limit = 0.6;
   //動作に影響するようなら#defineへ
   //---------------------------PID parameters---------------------------//
@@ -217,7 +217,7 @@ void receive(UDPSocket *receiver) { // UDP受信スレッド
       /*printf("%d, %d, %d, %d, %d\n", data[1], data[2], data[3], data[4],
              data[5]);*/
 
-      for (int i = 1; i <= 5; i++) {
+      for (int i = 1; i <= 9; i++) {
         if (data[i] > 0) {
           mdd[i] = 1;
         } else if (data[i] < 0) {
