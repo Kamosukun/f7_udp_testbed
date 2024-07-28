@@ -175,12 +175,13 @@ void receive(UDPSocket *receiver) { // UDP受信スレッド
   int data[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 
   //---------------------------PID parameters---------------------------//
-  Kp = 0.1;
-  Ki = 0.0015;
-  Kd = 0.000000001;
-  rpm_limit = 120.0;
-  pwm_limit = 0.6;
-  //動作に影響するようなら#defineへ
+  Kp = 0.1;          // Pゲイン
+  Ki = 0.0015;       // Iゲイン
+  Kd = 0.000000001;  // Dゲイン
+  rpm_limit = 120.0; //回転数の上限を設定する。
+  pwm_limit =
+      0.6; // MDに出力されるデューテー比の上限を設定する。安全装置の役割を持つ
+  //動作に影響するようなら#defineに変更
   //---------------------------PID parameters---------------------------//
 
   while (1) {
@@ -227,7 +228,7 @@ void receive(UDPSocket *receiver) { // UDP受信スレッド
         // mdp[i] = fabs(data[i]) / 255;
       }
       //---------------------------方向指令と速度指令を分離---------------------------//
-      t.stop();
+      t.stop();//タイマーを停止する、回転数の計算とPIDに使う
 
       //---------------------------エンコーダーの値をもとに回転数（RPM）を計算---------------------------//
       Pulse[1] = ENC1.getPulses();
@@ -236,7 +237,7 @@ void receive(UDPSocket *receiver) { // UDP受信スレッド
       Pulse[4] = ENC4.getPulses();
       Pulse[5] = ENC5.getPulses();
       Pulse[6] = ENC6.getPulses();
-      dt = duration_cast<milliseconds>(t.elapsed_time()).count();
+      dt = duration_cast<milliseconds>(t.elapsed_time()).count();//msで前回からの経過時間を取得
 
       for (int i = 1; i <= 6; i++) {
         RPM[i] = 60000.0 / dt * (Pulse[i]) /
@@ -254,16 +255,16 @@ void receive(UDPSocket *receiver) { // UDP受信スレッド
 
       //---------------------------PID---------------------------//
 
-      dt_d = (double)dt / 1000000000; // cast to double
+      dt_d = (double)dt / 1000000000; //dtをdouble型にキャストする、そのままだと大きすぎるので微小時間にする
       for (int i = 1; i <= 6; i++) {
         target[i] = abs((double)data[i]) / rpm_limit;
-        Error[i] = target[i] - (RPM[i] / rpm_limit);            // P
-        Integral[i] += ((Error[i] + last_Error[i]) * dt_d / 2); // I
-        Differential[i] = (Error[i] - last_Error[i]) / dt_d;    // D
+        Error[i] = target[i] - (RPM[i] / rpm_limit);            // P制御,目標値と現在値の差分をとる
+        Integral[i] += ((Error[i] + last_Error[i]) * dt_d / 2); // I制御,差分の時間積分、台形で近似して計算
+        Differential[i] = (Error[i] - last_Error[i]) / dt_d;    // D制御,差分の時間微分
 
         last_Error[i] = Error[i];
         Output[i] += ((Kp * Error[i]) + (Ki * Integral[i]) +
-                      (Kd * Differential[i])); // PID
+                      (Kd * Differential[i])); // PID制御,ゲインをかけて足し合わせる
         mdp[i] = Output[i];
 
         // 安全のためPWMの出力を制限　絶対に消すな
@@ -276,12 +277,12 @@ void receive(UDPSocket *receiver) { // UDP受信スレッド
       }
       //---------------------------PID---------------------------//
 
-      t.reset();
-      t.start();
+      t.reset();//タイマーをリセット
+      t.start();//タイマーを開始
       /*
       printf("%lf, %lf, %lf, %lf, %lf\n", mdp[1], mdp[2], mdp[3], mdp[4],
              mdp[5]);*/
-             
+
       // モーターがうまく回らないときは要調整、短すぎるとPIDがうまく動かず、長すぎるとレスポンスが悪くなる
       sleep_for(10);
 
@@ -289,8 +290,8 @@ void receive(UDPSocket *receiver) { // UDP受信スレッド
 
       MD1D = mdd[1];
       MD2D = mdd[2];
-      //MD3D = mdd[3];
-      //MD4D = mdd[4];
+      // MD3D = mdd[3];
+      // MD4D = mdd[4];
       MD5D = mdd[3];
       MD6D = mdd[4];
       MD7D = mdd[7];
@@ -298,8 +299,8 @@ void receive(UDPSocket *receiver) { // UDP受信スレッド
 
       MD1P = mdp[1];
       MD2P = mdp[2];
-      //MD3P = mdp[3];
-      //MD4P = mdp[4];
+      // MD3P = mdp[3];
+      // MD4P = mdp[4];
       MD5P = mdp[3];
       MD6P = mdp[4];
       MD7P = mdp[7];
